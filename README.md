@@ -31,8 +31,10 @@ This software is for educational purposes only. Do not risk money which you are 
 
 I have been testing with FTX so I recommend it. If you do not have an account please use my affiliate link below. You get a discount on fees and I get a percentage so its a win win. Thank you.
 
-After the FTX saga, I'm going defi so here's my affiliate link to dydx https://dydx.exchange/r/FZJVMZXV
+After the FTX saga, I'm going defi so here's my affiliate link to dydx https://dydx.exchange/r/JUDCLWBC
 I'm also re-programming my bots to use dydx exclusively
+
+For instructions on how to get your private keys for this bot, take a look here https://twitter.com/ChrisJangita/status/1593532341669896193
 
 More affiliate links to come. 
  
