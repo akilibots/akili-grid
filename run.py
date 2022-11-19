@@ -2,7 +2,6 @@ import datetime
 import json
 import urllib
 import websocket
-import rel
 from os import environ
 
 from dydx3 import Client
@@ -76,12 +75,12 @@ def main():
         network_id=NETWORK_ID_MAINNET,
         host=API_HOST_MAINNET,
         api_key_credentials={
-            'key': '8229996a-0599-1467-9d32-fc0d419b954b',
-            "secret": "4imKEFSvjDyD-BPRLqkn05dUg9i1Fmp-31_0AOiu",
-            "passphrase": "p5BYwGTmptkeWNeSqHhU",
+            'key': config['dydx']['key'],
+            "secret": config['dydx']['secret'],
+            "passphrase": config['dydx']['passphrase'],
         },
-        stark_private_key="037a4c3eb5d94dc257c467c14f5a45fa8bfe19e85c1d240839caae676b935bcf",
-        default_ethereum_address="0x54Be6C01459F2c27d9966E064C20D954ec3c22B1",
+        stark_private_key=config['dydx']['kestark_private_keyy'],
+        default_ethereum_address=config['dydx']['kdefault_ethereum_addressey'],
     )
     log('Signing URL')
     signature_time = generate_now_iso()
