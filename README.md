@@ -34,7 +34,7 @@ I have been testing with FTX so I recommend it. If you do not have an account pl
 After the FTX saga, I'm going defi so here's my affiliate link to dydx https://dydx.exchange/r/JUDCLWBC
 I'm also re-programming my bots to use dydx exclusively
 
-For instructions on how to get your private keys for this bot, take a look here https://twitter.com/ChrisJangita/status/1593532341669896193
+For instructions on how to get your private keys for this bot, take a look here https://twitter.com/ChrisJangita/status/1593531663597723648
 
 More affiliate links to come. 
  
