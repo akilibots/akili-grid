@@ -184,7 +184,7 @@ def main():
     while x <= config['bounds']['high'] * J:
         grid[x]=None
         x+=int(config['bounds']['step'] * J)
-    price = float(xchange.public.get_markets(config['main']['market']).data['markets'][config['main']['market']]['indexPrice'])
+    price = float(xchange.public.get_markets(config['main']['market']).data['markets'][config['main']['market']]['oraclePrice'])
 
     log('Placing starting orders')
     location=list(grid)[bisect(list(grid),price*J)]
@@ -235,7 +235,6 @@ def main():
         ).data['order']
 
     log('Starting bot loop')
-    websocket.enableTrace(True)
     wsapp = websocket.WebSocketApp(
         WS_HOST_MAINNET,
         on_open = ws_open,
