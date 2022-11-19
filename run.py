@@ -3,12 +3,13 @@ import json
 import urllib
 import websocket
 from os import environ
+from bisect import bisect
 
 from dydx3 import Client
 from dydx3.constants import *
 from dydx3.helpers.request_helpers import generate_now_iso
 
-
+J = 10000000000
 
 def log(msg):
     msg = config['main']['name'] + ':' + msg
@@ -38,19 +39,100 @@ def ws_open(ws):
     }))
 
 def ws_message(ws, message):
-    print(f'{message}')
-    order = xchange.private.create_order(position_id=242057,
-        market=config['main']['market'],
-        side=ORDER_SIDE_BUY,
-        order_type=ORDER_TYPE_LIMIT,
-        post_only=True,
-        size='6.8',
-        price='9',
-        limit_fee='0',
-        expiration_epoch_seconds=9000000000,
-    )
-    print(order)
+    # We are realoading configs so that you can update the grid when it is running
+    config = json.loads(environ['strategy'])
 
+    message = json.loads(message)
+    if message['type']!='channel_data':
+        return
+
+    if len(message['contents']['orders']) == 0:
+        return
+
+    order = message['contents']['orders'][0]
+    if order['status']!='FILLED':
+        return
+   
+    orderType = order['side']
+    orderPrice = order['price']
+    log(F'{orderType} order filled at {orderPrice}')
+
+    if config['main']['above'] == 'buy':
+        aboveOrder = ORDER_SIDE_BUY
+    else:
+        aboveOrder = ORDER_SIDE_SELL
+
+    if config['main']['below'] == 'buy':
+        belowOrder = ORDER_SIDE_BUY
+    else:
+        belowOrder = ORDER_SIDE_SELL
+
+    # Lets find the order that has been filled
+    for j in grid:
+        if grid[j] is None:
+            continue
+
+        if order['id'] != grid[j]['id']:
+            continue
+
+        # found it, let's build around it
+        grid[j] = None
+        
+        x = j
+        a = config['orders']['above']
+        numOrders = 0
+        for i in range(j + int(config['bounds']['step'] * J),int(config['bounds']['high'] * J) + int(config['bounds']['step'] * J), int(config['bounds']['step'] * J)):
+            if numOrders < config['orders']['above'] and grid[i] is None:
+                price =str(i / J)    
+                log(f'Placing {aboveOrder} order above at {price} - {numOrders+1}/{a}')
+                grid[i] = xchange.private.create_order(
+                    position_id=position_id,
+                    market=config['main']['market'],
+                    side=aboveOrder,
+                    order_type=ORDER_TYPE_LIMIT,
+                    post_only=True,
+                    size=str(config['orders']['size']),
+                    price=price,
+                    limit_fee='0',
+                    expiration_epoch_seconds=9000000000,
+                ).data['order']
+
+            if numOrders >= config['orders']['above'] and grid[i] is not None:
+                orderType = grid[i]['side']
+                orderPrice = grid[i]['price']
+                log(f'Cancelling {orderType} at {orderPrice}')
+                xchange.private.cancel_order(grid[i]['id'])
+                grid[i] = None
+            numOrders += 1
+
+ 
+        x = j
+        a = config['orders']['below']
+        numOrders = 0
+        for i in range(j - int(config['bounds']['step'] * J),int(config['bounds']['low'] * J) -int(config['bounds']['step'] * J), int(-config['bounds']['step'] * J)):
+            if numOrders < config['orders']['below'] and grid[i] is None:
+                price =str(i / J)    
+                log(f'Placing {belowOrder} order below at {price} - {numOrders+1}/{a}')
+                grid[i] = xchange.private.create_order(
+                    position_id=position_id,
+                    market=config['main']['market'],
+                    side=belowOrder,
+                    order_type=ORDER_TYPE_LIMIT,
+                    post_only=True,
+                    size=str(config['orders']['size']),
+                    price=price,
+                    limit_fee='0',
+                    expiration_epoch_seconds=9000000000,
+                ).data['order']
+
+            if numOrders >= config['orders']['below'] and grid[i] is not None:
+                orderType = grid[i]['side']
+                orderPrice = grid[i]['price']
+                log(f'Cancelling {orderType} at {orderPrice}')
+                xchange.private.cancel_order(grid[i]['id'])
+                grid[i] = None
+            numOrders += 1
+        break
 
 
 def ws_close(ws,p2,p3):
@@ -61,7 +143,9 @@ def main():
     global xchange 
     global signature
     global signature_time
-    
+    global grid
+    global position_id
+    grid = {}
     
     startTime = datetime.datetime.now()
     
@@ -75,12 +159,12 @@ def main():
         network_id=NETWORK_ID_MAINNET,
         host=API_HOST_MAINNET,
         api_key_credentials={
-            'key': config['dydx']['key'],
-            "secret": config['dydx']['secret'],
-            "passphrase": config['dydx']['passphrase'],
+            'key': config['dydx']['APIkey'],
+            'secret': config['dydx']['APIsecret'],
+            'passphrase': config['dydx']['APIpassphrase'],
         },
-        stark_private_key=config['dydx']['kestark_private_keyy'],
-        default_ethereum_address=config['dydx']['kdefault_ethereum_addressey'],
+        stark_private_key=config['dydx']['stark_private_key'],
+        default_ethereum_address=config['dydx']['default_ethereum_address'],
     )
     log('Signing URL')
     signature_time = generate_now_iso()
@@ -89,9 +173,68 @@ def main():
         method='GET',
         iso_timestamp=signature_time,
         data={},
-    )   
+    )
 
-    log('Starting web loop')
+    log('Getting account data')
+    position_id = xchange.private.get_account().data['account']['positionId']
+
+    log('Building grid')
+    x = int(config['bounds']['low'] * J)
+    i =0
+    while x <= config['bounds']['high'] * J:
+        grid[x]=None
+        x+=int(config['bounds']['step'] * J)
+    price = float(xchange.public.get_markets(config['main']['market']).data['markets'][config['main']['market']]['indexPrice'])
+
+    log('Placing starting orders')
+    location=list(grid)[bisect(list(grid),price*J)]
+    if config['main']['above'] == 'buy':
+        aboveOrder = ORDER_SIDE_BUY
+    else:
+        aboveOrder = ORDER_SIDE_SELL
+
+    if config['main']['below'] == 'buy':
+        belowOrder = ORDER_SIDE_BUY
+    else:
+        belowOrder = ORDER_SIDE_SELL
+    
+    x = location        
+    a = config['orders']['above']
+    for i in range(a):
+        x += config['bounds']['step'] * J
+        price =str(x / J)    
+        log(f'Placing {aboveOrder} order above at {price} - {i+1}/{a}')
+        grid[x] = xchange.private.create_order(
+            position_id=position_id,
+            market=config['main']['market'],
+            side=aboveOrder,
+            order_type=ORDER_TYPE_LIMIT,
+            post_only=True,
+            size=str(config['orders']['size']),
+            price=price,
+            limit_fee='0',
+            expiration_epoch_seconds=9000000000,
+        ).data['order']
+
+    x = location
+    a = config['orders']['below']
+    for i in range(a):
+        x -= config['bounds']['step'] * J
+        price = str(x / J)    
+        log(f'Placing {belowOrder} order below at {price} - {i+1}/{a}')
+        grid[x] = xchange.private.create_order(
+            position_id=position_id,
+            market=config['main']['market'],
+            side=belowOrder,
+            order_type=ORDER_TYPE_LIMIT,
+            post_only=True,
+            size=str(config['orders']['size']),
+            price=price,
+            limit_fee='0',
+            expiration_epoch_seconds=9000000000,
+        ).data['order']
+
+    log('Starting bot loop')
     websocket.enableTrace(True)
     wsapp = websocket.WebSocketApp(
         WS_HOST_MAINNET,
@@ -101,105 +244,6 @@ def main():
     )
 
     wsapp.run_forever()
-
-    # log('Fetching ticker.')
-    # price = Decimal(xchange.fetch_ticker(CONFIG.type.market)['last'])
-
-    # # Wait for start trigger
-    # log(f'Base price is {price}. Waiting for start price.')
-    # while price > CONFIG.start.low and price < CONFIG.start.high:
-    #     price = Decimal(xchange.fetch_ticker(CONFIG.type.market)['last'])
-
-    # log('Building grid and placing first order.')
-    # log(f'Start price hit at {price}')
-    # grid = {}
-    # gridPrice = CONFIG.bounds.low
-    # gridList = [gridPrice]
-    # while gridPrice <= CONFIG.bounds.high:
-    #     grid[gridPrice] = None
-    #     priceDiff = gridPrice - price
-    #     if abs(priceDiff) < CONFIG.bounds.step:
-    #         if priceDiff > 0 and CONFIG.start.location == 'above':
-    #             # gridPrice is above current price. Place above order
-    #             log(f'Placing start {CONFIG.start.order} order at {gridPrice} {CONFIG.start.location} {price}')
-    #             if CONFIG.start.order == 'buy':
-    #                 grid[gridPrice] = xchange.createLimitBuyOrder(CONFIG.type.market, CONFIG.start.amount, gridPrice)['id']
-    #             if CONFIG.start.order == 'sell':
-    #                 grid[gridPrice] = xchange.createLimitSellOrder(CONFIG.type.market, CONFIG.start.amount, gridPrice)['id']
-
-    #         if priceDiff < 0 and CONFIG.start.location == 'below':
-    #             # gridPrice is below current price place below order
-    #             log(f'Placing start {CONFIG.start.order} order at {gridPrice} {CONFIG.start.location} {price}')
-    #             if CONFIG.start.order == 'buy':
-    #                 grid[gridPrice] = xchange.createLimitBuyOrder(CONFIG.type.market, CONFIG.start.amount, gridPrice)['id']
-    #             if CONFIG.start.order == 'sell':
-    #                 grid[gridPrice] = xchange.createLimitSellOrder(CONFIG.type.market, CONFIG.start.amount, gridPrice)['id']
-
-    #     gridList += [gridPrice]
-    #     gridPrice += CONFIG.bounds.step
-
-    # # Main loop
-    # price = Decimal(xchange.fetch_ticker(CONFIG.type.market)['last'])
-    # log('Starting main loop.')
-    # # I use while true and several separate exit conditions because the boolean logic
-    # # becomes a headache: There are too many exit conditions to concot one massive while clause        
-    # while True:
-
-    #     # EXIT Conditions
-    #     if price < CONFIG.stop.low or price > CONFIG.stop.high:
-    #         break
-
-    #     if (datetime.datetime.now() - startTime).total_seconds() > CONFIG.stop.time:
-    #         break
-
-    #     #TODO: This can be optimised by getting all open orders from the exchange in one call before
-    #     # executing the loop instead of calling the exchange to check for each order. But for now, this works.
-
-    #     #TODO: Also need to think of a better way to handle high frequency grids, if several orders have been filled
-    #     # as price falls this will work, but not as it goes up
-    #     for gridIndex in range(0, len(gridList)):
-    #         if grid[gridList[gridIndex]] is not None:
-    #             # Check if order is still alive
-    #             if xchange.fetch_order(grid[gridList[gridIndex]])['status'] == 'closed':
-    #                 # Order has been closed. Mark as closed
-    #                 log(f'Order at {gridList[gridIndex]} filled.')
-    #                 grid[gridList[gridIndex]] = None
-
-    #                 # Check or place new orders below and remove any not needed
-    #                 numOrders = 1
-    #                 for newIndex in reversed(range(0, gridIndex)):
-    #                     if grid[gridList[newIndex]] is None and numOrders <= CONFIG.orders.below:
-    #                         log(f'Placing {CONFIG.type.below} order at price {gridList[newIndex]} below')
-    #                         if CONFIG.type.below == 'buy':
-    #                             grid[gridList[newIndex]] = xchange.createLimitBuyOrder(CONFIG.type.market, CONFIG.orders.size, gridList[newIndex])['id']
-    #                         if CONFIG.type.below == 'sell':
-    #                             grid[gridList[newIndex]] = xchange.createLimitSellOrder(CONFIG.type.market, CONFIG.orders.size, gridList[newIndex])['id']
-
-    #                     if numOrders > CONFIG.orders.below and grid[gridList[newIndex]] is not None:
-    #                         xchange.cancel_order(grid[gridList[newIndex]])
-    #                         grid[gridList[newIndex]] = None
-
-    #                     numOrders += 1
-
-    #                 # Check or place new above and remove any not needed
-    #                 numOrders = 1
-    #                 for newIndex in range(gridIndex + 1, len(gridList)):
-    #                     if grid[gridList[newIndex]] is None and numOrders <= CONFIG.orders.above:
-    #                         log(f'Placing {CONFIG.type.above} order at price {gridList[newIndex]} above')
-    #                         if CONFIG.type.above == 'buy':
-    #                             grid[gridList[newIndex]] = xchange.createLimitBuyOrder(CONFIG.type.market, CONFIG.orders.size, gridList[newIndex])['id']
-    #                         if CONFIG.type.above == 'sell':
-    #                             grid[gridList[newIndex]] = xchange.createLimitSellOrder(CONFIG.type.market, CONFIG.orders.size, gridList[newIndex])['id']
-
-    #                     if numOrders > CONFIG.orders.above and grid[gridList[newIndex]] is not None:
-    #                         xchange.cancel_order(grid[gridList[newIndex]])
-    #                         grid[gridList[newIndex]] = None
-
-    #                     numOrders += 1
-
-    #     price = Decimal(xchange.fetch_ticker(CONFIG.type.market)['last'])
-    # log("Exiting main loop let's find out why.")
-    # #TODO: Finish the app 😁
 
 if __name__ == "__main__":
     main()
