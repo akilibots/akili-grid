@@ -139,7 +139,17 @@ def ws_message(ws, message):
 
 
 def ws_close(ws,p2,p3):
-    pass
+    log('Grid terminated by user.')
+    for i in grid:
+        if grid[i] is None:
+            continue
+
+        orderType = grid[i]['side']
+        orderPrice = grid[i]['price']
+
+        log(f'Cancelling {orderType} at {orderPrice}')
+        xchange.private.cancel_order(grid[i]['id'])
+        grid[i] = None
 
 def main():
     global config
