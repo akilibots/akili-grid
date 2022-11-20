@@ -170,7 +170,12 @@ def ws_close(ws, p2, p3):
             xchange.private.cancel_order(grid[i]['id'])
             grid[i] = None
 def on_ping(wsapp, message):
-    global account
+    global account        
+    global config
+
+    # We are realoading configs so that you can update the grid when it is running
+    # To keep connection API active
+    config = json.loads(environ['strategy'])
     account = xchange.private.get_account().data['account']
     # log("I'm alive!")
 
