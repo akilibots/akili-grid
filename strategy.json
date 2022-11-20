@@ -26,7 +26,7 @@
     "start": {
         "low": 0,
         "high": 30,
-        "amount": 0.3,
+        "size": 0.3,
         "order": "buy",
         "location": "below"
     },
