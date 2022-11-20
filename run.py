@@ -1,5 +1,6 @@
 import datetime
 import json
+import requests
 import urllib
 import websocket
 from os import environ
@@ -19,11 +20,14 @@ def log(msg):
         return
 
     params = {
-        'chat_id': config['telegram']['chatid'].telegram.chatid,
+        'chat_id': config['telegram']['chatid'],
         'text': msg
     }
     payload_str = urllib.parse.urlencode(params, safe='@')
-    urllib.get('https://api.telegram.org/bot' + config['telegram']['bottoken'] + '/sendMessage', params=payload_str)
+    requests.get(
+        'https://api.telegram.org/bot' + config['telegram']['bottoken'] + '/sendMessage', 
+        params=payload_str
+        )
 
 def ws_open(ws):
     # Subscribe to order book updates
@@ -52,9 +56,17 @@ def ws_message(ws, message):
     order = message['contents']['orders'][0]
     if order['status']!='FILLED':
         return
+
+    # Lets find the order that has been filled
+    for j in grid:
+        if grid[j] is None:
+            continue
+
+        if order['id'] != grid[j]['id']:
+            continue
    
-    orderType = order['side']
-    orderPrice = order['price']
+    orderType = grid[j]['side']
+    orderPrice = grid[j]['price']
     log(F'{orderType} order filled at {orderPrice}')
 
     if config['main']['above'] == 'buy':
@@ -67,72 +79,63 @@ def ws_message(ws, message):
     else:
         belowOrder = ORDER_SIDE_SELL
 
-    # Lets find the order that has been filled
-    for j in grid:
-        if grid[j] is None:
-            continue
+    # found it, let's build around it
+    grid[j] = None
+    
+    x = j
+    a = config['orders']['above']
+    numOrders = 0
+    for i in range(j + int(config['bounds']['step'] * J),int(config['bounds']['high'] * J) + int(config['bounds']['step'] * J), int(config['bounds']['step'] * J)):
+        if numOrders < config['orders']['above'] and grid[i] is None:
+            price =str(i / J)    
+            log(f'Placing {aboveOrder} order above at {price} - {numOrders+1}/{a}')
+            grid[i] = xchange.private.create_order(
+                position_id=position_id,
+                market=config['main']['market'],
+                side=aboveOrder,
+                order_type=ORDER_TYPE_LIMIT,
+                post_only=True,
+                size=str(config['orders']['size']),
+                price=price,
+                limit_fee='0',
+                expiration_epoch_seconds=9000000000,
+            ).data['order']
 
-        if order['id'] != grid[j]['id']:
-            continue
+        if numOrders >= config['orders']['above'] and grid[i] is not None:
+            orderType = grid[i]['side']
+            orderPrice = grid[i]['price']
+            log(f'Cancelling {orderType} above at {orderPrice}')
+            xchange.private.cancel_order(grid[i]['id'])
+            grid[i] = None
+        numOrders += 1
 
-        # found it, let's build around it
-        grid[j] = None
-        
-        x = j
-        a = config['orders']['above']
-        numOrders = 0
-        for i in range(j + int(config['bounds']['step'] * J),int(config['bounds']['high'] * J) + int(config['bounds']['step'] * J), int(config['bounds']['step'] * J)):
-            if numOrders < config['orders']['above'] and grid[i] is None:
-                price =str(i / J)    
-                log(f'Placing {aboveOrder} order above at {price} - {numOrders+1}/{a}')
-                grid[i] = xchange.private.create_order(
-                    position_id=position_id,
-                    market=config['main']['market'],
-                    side=aboveOrder,
-                    order_type=ORDER_TYPE_LIMIT,
-                    post_only=True,
-                    size=str(config['orders']['size']),
-                    price=price,
-                    limit_fee='0',
-                    expiration_epoch_seconds=9000000000,
-                ).data['order']
 
-            if numOrders >= config['orders']['above'] and grid[i] is not None:
-                orderType = grid[i]['side']
-                orderPrice = grid[i]['price']
-                log(f'Cancelling {orderType} at {orderPrice}')
-                xchange.private.cancel_order(grid[i]['id'])
-                grid[i] = None
-            numOrders += 1
+    j = x
+    a = config['orders']['below']
+    numOrders = 0
+    for i in range(j - int(config['bounds']['step'] * J),int(config['bounds']['low'] * J) -int(config['bounds']['step'] * J), int(-config['bounds']['step'] * J)):
+        if numOrders < config['orders']['below'] and grid[i] is None:
+            price =str(i / J)    
+            log(f'Placing {belowOrder} order below at {price} - {numOrders+1}/{a}')
+            grid[i] = xchange.private.create_order(
+                position_id=position_id,
+                market=config['main']['market'],
+                side=belowOrder,
+                order_type=ORDER_TYPE_LIMIT,
+                post_only=True,
+                size=str(config['orders']['size']),
+                price=price,
+                limit_fee='0',
+                expiration_epoch_seconds=9000000000,
+            ).data['order']
 
- 
-        x = j
-        a = config['orders']['below']
-        numOrders = 0
-        for i in range(j - int(config['bounds']['step'] * J),int(config['bounds']['low'] * J) -int(config['bounds']['step'] * J), int(-config['bounds']['step'] * J)):
-            if numOrders < config['orders']['below'] and grid[i] is None:
-                price =str(i / J)    
-                log(f'Placing {belowOrder} order below at {price} - {numOrders+1}/{a}')
-                grid[i] = xchange.private.create_order(
-                    position_id=position_id,
-                    market=config['main']['market'],
-                    side=belowOrder,
-                    order_type=ORDER_TYPE_LIMIT,
-                    post_only=True,
-                    size=str(config['orders']['size']),
-                    price=price,
-                    limit_fee='0',
-                    expiration_epoch_seconds=9000000000,
-                ).data['order']
-
-            if numOrders >= config['orders']['below'] and grid[i] is not None:
-                orderType = grid[i]['side']
-                orderPrice = grid[i]['price']
-                log(f'Cancelling {orderType} at {orderPrice}')
-                xchange.private.cancel_order(grid[i]['id'])
-                grid[i] = None
-            numOrders += 1
-        break
+        if numOrders >= config['orders']['below'] and grid[i] is not None:
+            orderType = grid[i]['side']
+            orderPrice = grid[i]['price']
+            log(f'Cancelling {orderType} below at {orderPrice}')
+            xchange.private.cancel_order(grid[i]['id'])
+            grid[i] = None
+        numOrders += 1
 
 
 def ws_close(ws,p2,p3):
