@@ -189,9 +189,6 @@ def main():
     ask = float(orderBook['asks'][0]['price'])
     bid = float(orderBook['bids'][0]['price'])
     price = (ask + bid) / 2
-    print(price)
-    exit()
-    price = float(xchange.public.get_markets(config['main']['market']).data['markets'][config['main']['market']]['indexPrice'])
 
     log('Placing starting orders')
     location=list(grid)[bisect(list(grid),price*J)]
