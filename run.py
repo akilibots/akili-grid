@@ -184,7 +184,14 @@ def main():
     while x <= config['bounds']['high'] * J:
         grid[x]=None
         x+=int(config['bounds']['step'] * J)
-    price = float(xchange.public.get_markets(config['main']['market']).data['markets'][config['main']['market']]['oraclePrice'])
+
+    orderBook = xchange.public.get_orderbook(config['main']['market']).data
+    ask = float(orderBook['asks'][0]['price'])
+    bid = float(orderBook['bids'][0]['price'])
+    price = (ask + bid) / 2
+    print(price)
+    exit()
+    price = float(xchange.public.get_markets(config['main']['market']).data['markets'][config['main']['market']]['indexPrice'])
 
     log('Placing starting orders')
     location=list(grid)[bisect(list(grid),price*J)]
