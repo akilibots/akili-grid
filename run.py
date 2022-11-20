@@ -258,7 +258,7 @@ def main():
         side=startOrder,
         order_type=ORDER_TYPE_LIMIT,
         post_only=True,
-        size=str(config['orders']['size']),
+        size=str(config['start']['size']),
         price=str(price),
         limit_fee='0',
         expiration_epoch_seconds=9000000000,
