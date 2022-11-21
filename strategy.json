@@ -7,9 +7,9 @@
         "market": "SOL-USD"
     },
     "dydx": {
-        "key": "put your dydx API key here",
-        "secret": "put your dydx API secret here",
-        "passphrase": "put your dydx passphrase here",
+        "APIkey": "put your dydx API key here",
+        "APIsecret": "put your dydx API secret here",
+        "APIpassphrase": "put your dydx passphrase here",
         "stark_private_key": "put your stark private key here",
         "default_ethereum_address": "put your eth wallet address used in dydx here"
     },
