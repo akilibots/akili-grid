@@ -10,6 +10,8 @@ from dydx3 import Client
 from dydx3.constants import *
 from dydx3.helpers.request_helpers import generate_now_iso
 
+from config import config
+
 
 # Constants
 J = 10000000000
@@ -24,20 +26,21 @@ account = None
 
 
 def log(msg):
-    msg = config['main']['name'] + ':' + msg
+    conf = config()
+    msg = conf['main']['name'] + ':' + msg
     print(datetime.datetime.now().isoformat(), msg)
 
-    if config['telegram']['chatid'] == '' or config['telegram']['bottoken'] == '':
+    if conf['telegram']['chatid'] == '' or conf['telegram']['bottoken'] == '':
         return
 
     params = {
-        'chat_id': config['telegram']['chatid'],
+        'chat_id': conf['telegram']['chatid'],
         'text': msg
     }
     payload_str = urllib.parse.urlencode(params, safe='@')
     requests.get(
         'https://api.telegram.org/bot' +
-        config['telegram']['bottoken'] + '/sendMessage',
+        conf['telegram']['bottoken'] + '/sendMessage',
         params=payload_str
     )
 
@@ -57,11 +60,8 @@ def ws_open(ws):
 
 
 def ws_message(ws, message):
-    global config
     global grid
-
-    # We are realoading configs so that you can update the grid when it is running
-    config = json.loads(environ['strategy'])
+    conf = config()
 
     message = json.loads(message)
     if message['type'] != 'channel_data':
@@ -89,12 +89,12 @@ def ws_message(ws, message):
     orderPrice = grid[j]['price']
     log(F'{orderType} order filled at {orderPrice}')
 
-    if config['main']['above'] == 'buy':
+    if conf['main']['above'] == 'buy':
         aboveOrder = ORDER_SIDE_BUY
     else:
         aboveOrder = ORDER_SIDE_SELL
 
-    if config['main']['below'] == 'buy':
+    if conf['main']['below'] == 'buy':
         belowOrder = ORDER_SIDE_BUY
     else:
         belowOrder = ORDER_SIDE_SELL
@@ -103,25 +103,25 @@ def ws_message(ws, message):
     grid[j] = None
 
     x = j
-    a = config['orders']['above']
+    maxOrders = conf['orders']['above']
     numOrders = 0
-    for i in range(j + int(config['bounds']['step'] * J), int(config['bounds']['high'] * J) + int(config['bounds']['step'] * J), int(config['bounds']['step'] * J)):
-        if numOrders < config['orders']['above'] and grid[i] is None:
+    for i in range(j + int(conf['bounds']['step'] * J), int(conf['bounds']['high'] * J) + int(conf['bounds']['step'] * J), int(conf['bounds']['step'] * J)):
+        if numOrders < conf['orders']['above'] and grid[i] is None:
             price = str(i / J)
-            log(f'Placing {aboveOrder} order above at {price} - {numOrders+1}/{a}')
+            log(f'Placing {aboveOrder} order above at {price} - {numOrders+1}/{maxOrders}')
             grid[i] = xchange.private.create_order(
                 position_id=account['positionId'],
-                market=config['main']['market'],
+                market=conf['main']['market'],
                 side=aboveOrder,
                 order_type=ORDER_TYPE_LIMIT,
                 post_only=True,
-                size=str(config['orders']['size']),
+                size=str(conf['orders']['size']),
                 price=price,
                 limit_fee='0',
                 expiration_epoch_seconds=9000000000,
             ).data['order']
 
-        if numOrders >= config['orders']['above'] and grid[i] is not None:
+        if numOrders >= conf['orders']['above'] and grid[i] is not None:
             orderType = grid[i]['side']
             orderPrice = grid[i]['price']
             log(f'Cancelling {orderType} above at {orderPrice}')
@@ -130,25 +130,25 @@ def ws_message(ws, message):
         numOrders += 1
 
     j = x
-    a = config['orders']['below']
+    maxOrders = conf['orders']['below']
     numOrders = 0
-    for i in range(j - int(config['bounds']['step'] * J), int(config['bounds']['low'] * J) - int(config['bounds']['step'] * J), int(-config['bounds']['step'] * J)):
-        if numOrders < config['orders']['below'] and grid[i] is None:
+    for i in range(j - int(conf['bounds']['step'] * J), int(conf['bounds']['low'] * J) - int(conf['bounds']['step'] * J), int(-conf['bounds']['step'] * J)):
+        if numOrders < conf['orders']['below'] and grid[i] is None:
             price = str(i / J)
-            log(f'Placing {belowOrder} order below at {price} - {numOrders+1}/{a}')
+            log(f'Placing {belowOrder} order below at {price} - {numOrders+1}/{maxOrders}')
             grid[i] = xchange.private.create_order(
                 position_id=account['positionId'],
-                market=config['main']['market'],
+                market=conf['main']['market'],
                 side=belowOrder,
                 order_type=ORDER_TYPE_LIMIT,
                 post_only=True,
-                size=str(config['orders']['size']),
+                size=str(conf['orders']['size']),
                 price=price,
                 limit_fee='0',
                 expiration_epoch_seconds=9000000000,
             ).data['order']
 
-        if numOrders >= config['orders']['below'] and grid[i] is not None:
+        if numOrders >= conf['orders']['below'] and grid[i] is not None:
             orderType = grid[i]['side']
             orderPrice = grid[i]['price']
             log(f'Cancelling {orderType} order below at {orderPrice}')
@@ -171,11 +171,8 @@ def ws_close(ws, p2, p3):
             grid[i] = None
 def on_ping(wsapp, message):
     global account        
-    global config
 
-    # We are realoading configs so that you can update the grid when it is running
     # To keep connection API active
-    config = json.loads(environ['strategy'])
     account = xchange.private.get_account().data['account']
     # log("I'm alive!")
 
@@ -187,11 +184,7 @@ def main():
     global grid
 
     grid = {}
-
     startTime = datetime.datetime.now()
-
-    # Load configuration
-    config = json.loads(environ['strategy'])
 
     log(f'Start time {startTime.isoformat()} - strategy loaded.')
 
@@ -200,14 +193,14 @@ def main():
         network_id=NETWORK_ID_MAINNET,
         host=API_HOST_MAINNET,
         api_key_credentials={
-            'key': config['dydx']['APIkey'],
-            'secret': config['dydx']['APIsecret'],
-            'passphrase': config['dydx']['APIpassphrase'],
+            'key': conf['dydx']['APIkey'],
+            'secret': conf['dydx']['APIsecret'],
+            'passphrase': conf['dydx']['APIpassphrase'],
         },
-        stark_private_key=config['dydx']['stark_private_key'],
-        default_ethereum_address=config['dydx']['default_ethereum_address'],
+        stark_private_key=conf['dydx']['stark_private_key'],
+        default_ethereum_address=conf['dydx']['default_ethereum_address'],
     )
-    log('Signing URL')
+    
     signature_time = generate_now_iso()
     signature = xchange.private.sign(
         request_path='/ws/accounts',
@@ -216,18 +209,21 @@ def main():
         data={},
     )
 
-    log('Getting account data')
+    log('Getting initial account data')
     account = xchange.private.get_account().data['account']
 
     log('Building grid')
+
+    conf = config()
+
     for x in range(
-            int(config['bounds']['low'] * J),
-            int(config['bounds']['high'] * J) +
-        int(config['bounds']['step'] * J),
-            int(config['bounds']['step'] * J)):
+            int(conf['bounds']['low'] * J),
+            int(conf['bounds']['high'] * J) +
+        int(conf['bounds']['step'] * J),
+            int(conf['bounds']['step'] * J)):
         grid[x] = None
 
-    orderBook = xchange.public.get_orderbook(config['main']['market']).data
+    orderBook = xchange.public.get_orderbook(conf['main']['market']).data
     ask = float(orderBook['asks'][0]['price'])
     bid = float(orderBook['bids'][0]['price'])
     price = (ask + bid) / 2
@@ -236,16 +232,16 @@ def main():
     # location = gridline above current price
     location = list(grid)[bisect(list(grid), price*J)]
 
-    if config['start']['order'] == 'buy':
+    if conf['start']['order'] == 'buy':
         startOrder = ORDER_SIDE_BUY
 
-    if config['start']['order'] == 'sell':
+    if conf['start']['order'] == 'sell':
         startOrder = ORDER_SIDE_SELL
 
-    startLocation = config['start']['location']
+    startLocation = conf['start']['location']
 
     if  startLocation == 'below':
-        x = location - int(config['bounds']['step'] * J)
+        x = location - int(conf['bounds']['step'] * J)
     else:
         x = location
 
@@ -254,11 +250,11 @@ def main():
     log(f'Placing {startOrder} order {startLocation} at {price}')
     grid[x] = xchange.private.create_order(
         position_id=account['positionId'],
-        market=config['main']['market'],
+        market=conf['main']['market'],
         side=startOrder,
         order_type=ORDER_TYPE_LIMIT,
         post_only=True,
-        size=str(config['start']['size']),
+        size=str(conf['start']['size']),
         price=str(price),
         limit_fee='0',
         expiration_epoch_seconds=9000000000,
