@@ -17,7 +17,6 @@ from config import config
 J = 10000000000
 
 # Global Vars
-config = None
 xchange = None
 signature = None
 signature_time = None
@@ -177,7 +176,6 @@ def on_ping(wsapp, message):
     # log("I'm alive!")
 
 def main():
-    global config
     global xchange
     global signature
     global signature_time
