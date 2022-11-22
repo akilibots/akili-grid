@@ -4,4 +4,4 @@ WORKDIR /app
 COPY . .
 RUN apk add build-base && pip install -r requirements.txt
 
-CMD ["python3","/app/run.py"]
+CMD ["python3","-u","/app/run.py"]
