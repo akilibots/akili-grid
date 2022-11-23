@@ -168,12 +168,12 @@ def ws_close(ws, p2, p3):
             log(f'Cancelling {orderType} order at {orderPrice}')
             xchange.private.cancel_order(grid[i]['id'])
             grid[i] = None
+
 def on_ping(wsapp, message):
     global account        
-
     # To keep connection API active
     account = xchange.private.get_account().data['account']
-    # log("I'm alive!")
+    log("I'm alive!")
 
 def main():
     global xchange
@@ -183,6 +183,7 @@ def main():
 
     grid = {}
     startTime = datetime.datetime.now()
+    conf = config()
 
     log(f'Start time {startTime.isoformat()} - strategy loaded.')
 
@@ -211,8 +212,6 @@ def main():
     account = xchange.private.get_account().data['account']
 
     log('Building grid')
-
-    conf = config()
 
     for x in range(
             int(conf['bounds']['low'] * J),
