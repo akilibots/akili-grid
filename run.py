@@ -15,6 +15,7 @@ from config import config
 
 # Constants
 J = 10000000000
+GOOD_TILL = 1672531200
 
 # Global Vars
 xchange = None
@@ -43,6 +44,25 @@ def log(msg):
         params=payload_str
     )
 
+def createOrder(aSide, aSize, aPrice):
+    global xchange
+    global account
+    conf = config()
+
+    order = xchange.private.create_order(
+        position_id=account['positionId'],
+        market=conf['main']['market'],
+        side=aSide,
+        order_type=ORDER_TYPE_LIMIT,
+        post_only=False,
+        size=aSize,
+        price=aPrice,
+        limit_fee='0',
+        expiration_epoch_seconds=GOOD_TILL,
+    ).data['order']
+
+    log(f'Placed {aSide} order at {aPrice} : {order["status"]}')
+    return order 
 
 def ws_open(ws):
     # Subscribe to order book updates
@@ -107,24 +127,16 @@ def ws_message(ws, message):
     for i in range(j + int(conf['bounds']['step'] * J), int(conf['bounds']['high'] * J) + int(conf['bounds']['step'] * J), int(conf['bounds']['step'] * J)):
         if numOrders < conf['orders']['above'] and grid[i] is None:
             price = str(i / J)
-            log(f'Placing {aboveOrder} order above at {price} - {numOrders+1}/{maxOrders}')
-            grid[i] = xchange.private.create_order(
-                position_id=account['positionId'],
-                market=conf['main']['market'],
-                side=aboveOrder,
-                order_type=ORDER_TYPE_LIMIT,
-                post_only=True,
-                size=str(conf['orders']['size']),
-                price=price,
-                limit_fee='0',
-                expiration_epoch_seconds=9000000000,
-            ).data['order']
+            grid[i] = createOrder(aboveOrder, str(conf['orders']['size']), price)
 
         if numOrders >= conf['orders']['above'] and grid[i] is not None:
             orderType = grid[i]['side']
             orderPrice = grid[i]['price']
             log(f'Cancelling {orderType} above at {orderPrice}')
-            xchange.private.cancel_order(grid[i]['id'])
+            try:
+                xchange.private.cancel_order(grid[i]['id'])
+            except:
+                log('Error cancelling order, possibly already canceled. Moving on...')
             grid[i] = None
         numOrders += 1
 
@@ -134,24 +146,16 @@ def ws_message(ws, message):
     for i in range(j - int(conf['bounds']['step'] * J), int(conf['bounds']['low'] * J) - int(conf['bounds']['step'] * J), int(-conf['bounds']['step'] * J)):
         if numOrders < conf['orders']['below'] and grid[i] is None:
             price = str(i / J)
-            log(f'Placing {belowOrder} order below at {price} - {numOrders+1}/{maxOrders}')
-            grid[i] = xchange.private.create_order(
-                position_id=account['positionId'],
-                market=conf['main']['market'],
-                side=belowOrder,
-                order_type=ORDER_TYPE_LIMIT,
-                post_only=True,
-                size=str(conf['orders']['size']),
-                price=price,
-                limit_fee='0',
-                expiration_epoch_seconds=9000000000,
-            ).data['order']
+            grid[i] = createOrder(belowOrder, str(conf['orders']['size']), price)
 
         if numOrders >= conf['orders']['below'] and grid[i] is not None:
             orderType = grid[i]['side']
             orderPrice = grid[i]['price']
             log(f'Cancelling {orderType} order below at {orderPrice}')
-            xchange.private.cancel_order(grid[i]['id'])
+            try:
+                xchange.private.cancel_order(grid[i]['id'])
+            except:
+                log('Error cancelling order, possibly already canceled. Moving on...')
             grid[i] = None
         numOrders += 1
 
@@ -169,17 +173,17 @@ def ws_close(ws, p2, p3):
             xchange.private.cancel_order(grid[i]['id'])
             grid[i] = None
 
-def on_ping(wsapp, message):
+def on_ping(ws, message):
     global account        
     # To keep connection API active
     account = xchange.private.get_account().data['account']
-    log("I'm alive!")
 
 def main():
     global xchange
     global signature
     global signature_time
     global grid
+    global account
 
     grid = {}
     startTime = datetime.datetime.now()
@@ -243,19 +247,7 @@ def main():
         x = location
 
     price = x / J
-
-    log(f'Placing {startOrder} order {startLocation} at {price}')
-    grid[x] = xchange.private.create_order(
-        position_id=account['positionId'],
-        market=conf['main']['market'],
-        side=startOrder,
-        order_type=ORDER_TYPE_LIMIT,
-        post_only=True,
-        size=str(conf['start']['size']),
-        price=str(price),
-        limit_fee='0',
-        expiration_epoch_seconds=9000000000,
-    ).data['order']
+    grid[x] = createOrder(startOrder, str(conf['start']['size']), str(price))
 
     log('Starting bot loop')
     # websocket.enableTrace(True)
