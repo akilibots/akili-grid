@@ -57,7 +57,7 @@ def createOrder(aSide, aSize, aPrice):
         post_only=False,
         size=aSize,
         price=aPrice,
-        limit_fee='0',
+        limit_fee='0.1',
         expiration_epoch_seconds=GOOD_TILL,
     ).data['order']
 
