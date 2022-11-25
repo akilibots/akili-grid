@@ -174,9 +174,19 @@ def ws_close(ws, p2, p3):
             grid[i] = None
 
 def on_ping(ws, message):
-    global account        
+    global account
+    global beginOrder        
     # To keep connection API active
     account = xchange.private.get_account().data['account']
+    if beginOrder is not None:
+        if beginOrder['status'] == 'PENDING':
+            log('Waited too long for start order to fill. Exiting.')
+            xchange.private.cancel_order(beginOrder['id'])
+            ws.close()
+            return
+        if beginOrder['status'] == 'FILLED':
+            log('Start order filled. We are in business!')
+            beginOrder = None
 
 def main():
     global xchange
@@ -184,10 +194,12 @@ def main():
     global signature_time
     global grid
     global account
+    global beginOrder
 
     grid = {}
     startTime = datetime.datetime.now()
     conf = config()
+    beginOrder = None
 
     log(f'Start time {startTime.isoformat()} - strategy loaded.')
 
@@ -248,6 +260,7 @@ def main():
 
     price = x / J
     grid[x] = createOrder(startOrder, str(conf['start']['size']), str(price))
+    beginOrder = grid[x]
 
     log('Starting bot loop')
     # websocket.enableTrace(True)
