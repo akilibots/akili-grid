@@ -25,6 +25,7 @@ grid = {}
 account = None
 wait = 0
 beginOrder = None
+trades = []
 
 
 def log(msg):
@@ -46,9 +47,11 @@ def log(msg):
         params=payload_str
     )
 
+
 def createOrder(aSide, aSize, aPrice):
     global xchange
     global account
+    global trades
     conf = config()
 
     order = xchange.private.create_order(
@@ -57,14 +60,40 @@ def createOrder(aSide, aSize, aPrice):
         side=aSide,
         order_type=ORDER_TYPE_LIMIT,
         post_only=False,
-        size=aSize,
-        price=aPrice,
+        size=str(aSize),
+        price=str(aPrice),
         limit_fee='0.1',
         expiration_epoch_seconds=GOOD_TILL,
     ).data['order']
 
-    log(f'Placed {aSide} order at {aPrice} : {order["status"]}')
+    trades.append(('buy',aPrice,aSize))
+
+    log(f'{aSide} order at {aPrice} placed')
     return order 
+
+def profit():
+    global trades
+    conf = config()
+
+    matcher = trades
+    total = 0
+
+    while len(matcher)>0:
+
+        i1 = matcher[0]
+        aSide = i1[0] # buy or sell
+        aOpposite = 'sell' if aSide == 'buy' else 'buy'
+
+        # lets look for corresponding opposite order
+        matcher.remove(i1)
+        for i2 in matcher:
+            if i2 == (aOpposite,i1[1] + conf['bounds']['step'],i1[2]):
+                total += abs(i2[1] - i1[1]) * i2[2]
+                matcher.remove(i2)
+                break
+
+    log(f'Total profit 💰 {total}')
+
 
 def ws_open(ws):
     # Subscribe to order book updates
@@ -82,6 +111,7 @@ def ws_open(ws):
 
 def ws_message(ws, message):
     global grid
+    global beginOrder
     conf = config()
 
     message = json.loads(message)
@@ -106,9 +136,18 @@ def ws_message(ws, message):
     if not foundFlag:
         return
 
+    if order['id'] == beginOrder['id']:
+        # trigger order executed
+        log('Start order filled 🚀 We are in business!')
+        beginOrder = None
+
     orderType = grid[j]['side']
     orderPrice = grid[j]['price']
+    orderSize = grid[j]['size']
     log(F'{orderType} order filled at {orderPrice}')
+    trades.append((orderType.lower(),float(orderPrice),float(orderSize)))
+    
+    profit()
 
     # if conf['main']['above'] == 'buy':
     #    aboveOrder = ORDER_SIDE_BUY
@@ -124,36 +163,36 @@ def ws_message(ws, message):
     grid[j] = None
 
     x = j
-    maxOrders = conf['orders']['above']
+
     numOrders = 0
     for i in range(j + int(conf['bounds']['step'] * J), int(conf['bounds']['high'] * J) + int(conf['bounds']['step'] * J), int(conf['bounds']['step'] * J)):
         if numOrders < conf['orders']['above'] and grid[i] is None:
-            price = str(i / J)
-            grid[i] = createOrder(aboveOrder, str(conf['orders']['size']), price)
+            price = i / J
+            grid[i] = createOrder(aboveOrder, conf['orders']['size'], price)
 
         if numOrders >= conf['orders']['above'] and grid[i] is not None:
             orderType = grid[i]['side']
             orderPrice = grid[i]['price']
-            log(f'Cancelling {orderType} above at {orderPrice}')
+            log(f'Cancel {orderType} above at {orderPrice}')
             try:
                 xchange.private.cancel_order(grid[i]['id'])
             except:
-                log('Error cancelling order, possibly already canceled. Moving on...')
+                log('Cancel order error 😡 manually canceled?')
             grid[i] = None
         numOrders += 1
 
     j = x
-    maxOrders = conf['orders']['below']
+
     numOrders = 0
     for i in range(j - int(conf['bounds']['step'] * J), int(conf['bounds']['low'] * J) - int(conf['bounds']['step'] * J), int(-conf['bounds']['step'] * J)):
         if numOrders < conf['orders']['below'] and grid[i] is None:
-            price = str(i / J)
-            grid[i] = createOrder(belowOrder, str(conf['orders']['size']), price)
+            price = i / J
+            grid[i] = createOrder(belowOrder, conf['orders']['size'], price)
 
         if numOrders >= conf['orders']['below'] and grid[i] is not None:
             orderType = grid[i]['side']
             orderPrice = grid[i]['price']
-            log(f'Cancelling {orderType} order below at {orderPrice}')
+            log(f'Cancel {orderType} order below at {orderPrice}')
             try:
                 xchange.private.cancel_order(grid[i]['id'])
             except:
@@ -185,13 +224,9 @@ def on_ping(ws, message):
     if conf['start']['price'] == 0:
         if beginOrder is not None:
                 if beginOrder['status'] == 'PENDING':
-                    log('Waited too long for start order to fill. Exiting.')
+                    log('Start order time out 😴 Exiting.')
                     xchange.private.cancel_order(beginOrder['id'])
                     ws.close()
-
-                if beginOrder['status'] == 'FILLED':
-                    log('Start order filled. We are in business!')
-                    beginOrder = None
 
 
 def main():
@@ -208,7 +243,7 @@ def main():
 
     log(f'Start time {startTime.isoformat()} - strategy loaded.')
 
-    log('Connecting to exchange.')
+    log('dYdX connect.')
     xchange = Client(
         network_id=NETWORK_ID_MAINNET,
         host=API_HOST_MAINNET,
@@ -229,10 +264,10 @@ def main():
         data={},
     )
 
-    log('Getting initial account data')
+    log('Initialise account.')
     account = xchange.private.get_account().data['account']
 
-    log('Building grid')
+    log('Grid build.')
 
     for x in range(
             int(conf['bounds']['low'] * J),
@@ -250,7 +285,7 @@ def main():
     else:
         price = conf['start']['price']
 
-    log('Placing start order')
+    log('Place start order.')
     # location = gridline above current price
     location = list(grid)[bisect(list(grid), price*J)]
 
@@ -264,10 +299,9 @@ def main():
 
     price = x / J
 
-    grid[x] = createOrder(startOrder, str(conf['start']['size']), str(price))
+    grid[x] = createOrder(startOrder, conf['start']['size'], price)
     beginOrder = grid[x]
 
-    log('Starting bot loop')
     # websocket.enableTrace(True)
     wsapp = websocket.WebSocketApp(
         WS_HOST_MAINNET,
