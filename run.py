@@ -23,6 +23,8 @@ signature = None
 signature_time = None
 grid = {}
 account = None
+wait = 0
+beginOrder = None
 
 
 def log(msg):
@@ -108,15 +110,15 @@ def ws_message(ws, message):
     orderPrice = grid[j]['price']
     log(F'{orderType} order filled at {orderPrice}')
 
-    if conf['main']['above'] == 'buy':
-        aboveOrder = ORDER_SIDE_BUY
-    else:
-        aboveOrder = ORDER_SIDE_SELL
+    # if conf['main']['above'] == 'buy':
+    #    aboveOrder = ORDER_SIDE_BUY
+    #else:
+    aboveOrder = ORDER_SIDE_SELL
 
-    if conf['main']['below'] == 'buy':
-        belowOrder = ORDER_SIDE_BUY
-    else:
-        belowOrder = ORDER_SIDE_SELL
+    # if conf['main']['below'] == 'buy':
+    belowOrder = ORDER_SIDE_BUY
+    # else:
+    #    belowOrder = ORDER_SIDE_SELL
 
     # found it, let's build around it
     grid[j] = None
@@ -178,15 +180,19 @@ def on_ping(ws, message):
     global beginOrder        
     # To keep connection API active
     account = xchange.private.get_account().data['account']
-    if beginOrder is not None:
-        if beginOrder['status'] == 'PENDING':
-            log('Waited too long for start order to fill. Exiting.')
-            xchange.private.cancel_order(beginOrder['id'])
-            ws.close()
-            return
-        if beginOrder['status'] == 'FILLED':
-            log('Start order filled. We are in business!')
-            beginOrder = None
+
+    conf = config()
+    if conf['start']['price'] == 0:
+        if beginOrder is not None:
+                if beginOrder['status'] == 'PENDING':
+                    log('Waited too long for start order to fill. Exiting.')
+                    xchange.private.cancel_order(beginOrder['id'])
+                    ws.close()
+
+                if beginOrder['status'] == 'FILLED':
+                    log('Start order filled. We are in business!')
+                    beginOrder = None
+
 
 def main():
     global xchange
@@ -196,10 +202,9 @@ def main():
     global account
     global beginOrder
 
-    grid = {}
+ 
     startTime = datetime.datetime.now()
     conf = config()
-    beginOrder = None
 
     log(f'Start time {startTime.isoformat()} - strategy loaded.')
 
@@ -236,10 +241,14 @@ def main():
             int(conf['bounds']['step'] * J)):
         grid[x] = None
 
-    orderBook = xchange.public.get_orderbook(conf['main']['market']).data
-    ask = float(orderBook['asks'][0]['price'])
-    bid = float(orderBook['bids'][0]['price'])
-    price = (ask + bid) / 2
+    
+    if conf['start']['price'] == 0: # zero means start at market price
+        orderBook = xchange.public.get_orderbook(conf['main']['market']).data
+        ask = float(orderBook['asks'][0]['price'])
+        bid = float(orderBook['bids'][0]['price'])
+        price = (ask + bid) / 2
+    else:
+        price = conf['start']['price']
 
     log('Placing start order')
     # location = gridline above current price
@@ -247,18 +256,14 @@ def main():
 
     if conf['start']['order'] == 'buy':
         startOrder = ORDER_SIDE_BUY
+        x = location - int(conf['bounds']['step'] * J)
 
     if conf['start']['order'] == 'sell':
         startOrder = ORDER_SIDE_SELL
-
-    startLocation = conf['start']['location']
-
-    if  startLocation == 'below':
-        x = location - int(conf['bounds']['step'] * J)
-    else:
         x = location
 
     price = x / J
+
     grid[x] = createOrder(startOrder, str(conf['start']['size']), str(price))
     beginOrder = grid[x]
 

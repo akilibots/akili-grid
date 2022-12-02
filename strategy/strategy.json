@@ -1,9 +1,6 @@
 {
     "main": {
         "name": "Jangita📈",
-        "above": "sell",
-        "below": "buy",
-        "leverage": "3",
         "market": "SOL-USD"
     },
     "dydx": {
@@ -24,11 +21,9 @@
         "step": 0.05
     },
     "start": {
-        "low": 0,
-        "high": 30,
+        "price": 0,
         "size": 0.3,
-        "order": "buy",
-        "location": "below"
+        "order": "buy"
     },
     "stop": {
         "low": 0,
