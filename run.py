@@ -26,6 +26,7 @@ account = None
 wait = 0
 beginOrder = None
 trades = []
+user = None
 
 
 def log(msg):
@@ -66,14 +67,16 @@ def createOrder(aSide, aSize, aPrice):
         expiration_epoch_seconds=GOOD_TILL,
     ).data['order']
 
-    trades.append(('buy',aPrice,aSize))
-
-    log(f'{aSide} order at {aPrice} placed')
-    return order 
+    log(f'{aSide} order placed at {aPrice} ')
+    return order
 
 def profit():
     global trades
+    global user
+
+    fee = user['makerFeeRate']
     conf = config()
+    aFee = 0
 
     matcher = trades
     total = 0
@@ -83,16 +86,24 @@ def profit():
         i1 = matcher[0]
         aSide = i1[0] # buy or sell
         aOpposite = 'sell' if aSide == 'buy' else 'buy'
+        print(matcher)
 
         # lets look for corresponding opposite order
         matcher.remove(i1)
         for i2 in matcher:
+            print(i2)
+            print((aOpposite,i1[1] + conf['bounds']['step'],i1[2]))
             if i2 == (aOpposite,i1[1] + conf['bounds']['step'],i1[2]):
-                total += abs(i2[1] - i1[1]) * i2[2]
+                print('in')
+                total += abs(int(i2[1] * J) - int(i1[1] * J)) * i2[2]
+                # remove fee
+                aFee = int(i2[1] * i2[2] * fee * J)
+                aFee += int(i1[1] * i1[2] * fee * J)
+
                 matcher.remove(i2)
                 break
 
-    log(f'Total profit 💰 {total}')
+    log(f'Total profit 💰 {total/J} - fee {aFee/J} = {(total - aFee)/J}')
 
 
 def ws_open(ws):
@@ -121,25 +132,26 @@ def ws_message(ws, message):
     if len(message['contents']['orders']) == 0:
         return
 
-    order = message['contents']['orders'][0]
-    if order['status'] != 'FILLED':
-        return
-
-    # Lets find the order that has been filled
     foundFlag = False
-    for j in grid:
-        if grid[j] is not None:
-            if order['id'] == grid[j]['id']:
-                foundFlag = True
-                break
+    for order in message['contents']['orders']:
+        if order['status'] != 'FILLED':
+            break
+
+        # Lets find the order that has been filled
+        for j in grid:
+            if grid[j] is not None:
+                if order['id'] == grid[j]['id']:
+                    foundFlag = True
+                    break
 
     if not foundFlag:
         return
 
-    if order['id'] == beginOrder['id']:
-        # trigger order executed
-        log('Start order filled 🚀 We are in business!')
-        beginOrder = None
+    if beginOrder is not None:
+            if order['id'] == beginOrder['id']:
+            # trigger order executed
+                log('Start order filled 🚀 We are in business!')
+                beginOrder = None
 
     orderType = grid[j]['side']
     orderPrice = grid[j]['price']
@@ -148,16 +160,6 @@ def ws_message(ws, message):
     trades.append((orderType.lower(),float(orderPrice),float(orderSize)))
     
     profit()
-
-    # if conf['main']['above'] == 'buy':
-    #    aboveOrder = ORDER_SIDE_BUY
-    #else:
-    aboveOrder = ORDER_SIDE_SELL
-
-    # if conf['main']['below'] == 'buy':
-    belowOrder = ORDER_SIDE_BUY
-    # else:
-    #    belowOrder = ORDER_SIDE_SELL
 
     # found it, let's build around it
     grid[j] = None
@@ -168,7 +170,7 @@ def ws_message(ws, message):
     for i in range(j + int(conf['bounds']['step'] * J), int(conf['bounds']['high'] * J) + int(conf['bounds']['step'] * J), int(conf['bounds']['step'] * J)):
         if numOrders < conf['orders']['above'] and grid[i] is None:
             price = i / J
-            grid[i] = createOrder(aboveOrder, conf['orders']['size'], price)
+            grid[i] = createOrder(ORDER_SIDE_SELL, conf['orders']['size'], price)
 
         if numOrders >= conf['orders']['above'] and grid[i] is not None:
             orderType = grid[i]['side']
@@ -187,7 +189,7 @@ def ws_message(ws, message):
     for i in range(j - int(conf['bounds']['step'] * J), int(conf['bounds']['low'] * J) - int(conf['bounds']['step'] * J), int(-conf['bounds']['step'] * J)):
         if numOrders < conf['orders']['below'] and grid[i] is None:
             price = i / J
-            grid[i] = createOrder(belowOrder, conf['orders']['size'], price)
+            grid[i] = createOrder(ORDER_SIDE_BUY, conf['orders']['size'], price)
 
         if numOrders >= conf['orders']['below'] and grid[i] is not None:
             orderType = grid[i]['side']
@@ -215,10 +217,10 @@ def ws_close(ws, p2, p3):
             grid[i] = None
 
 def on_ping(ws, message):
-    global account
+    global user
     global beginOrder        
     # To keep connection API active
-    account = xchange.private.get_account().data['account']
+    user = xchange.private.get_user().data['user']
 
     conf = config()
     if conf['start']['price'] == 0:
@@ -236,6 +238,7 @@ def main():
     global grid
     global account
     global beginOrder
+    global user
 
  
     startTime = datetime.datetime.now()
@@ -266,6 +269,7 @@ def main():
 
     log('Initialise account.')
     account = xchange.private.get_account().data['account']
+    user = xchange.private.get_user().data['user']
 
     log('Grid build.')
 

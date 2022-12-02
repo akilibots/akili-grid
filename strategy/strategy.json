@@ -25,12 +25,7 @@
         "size": 0.3,
         "order": "buy"
     },
-    "stop": {
-        "low": 0,
-        "high": 1000000,
-        "close": "no",
-        "time": 3600
-    },
+    "stop": { "price": 0 },
     "telegram": {
         "chatid": "",
         "bottoken": ""
