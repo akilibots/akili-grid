@@ -78,7 +78,7 @@ def profit():
     conf = config()
     aFee = 0
 
-    matcher = trades
+    matcher = trades.copy()
     total = 0
 
     while len(matcher)>0:
@@ -86,15 +86,11 @@ def profit():
         i1 = matcher[0]
         aSide = i1[0] # buy or sell
         aOpposite = 'sell' if aSide == 'buy' else 'buy'
-        print(matcher)
 
         # lets look for corresponding opposite order
         matcher.remove(i1)
         for i2 in matcher:
-            print(i2)
-            print((aOpposite,i1[1] + conf['bounds']['step'],i1[2]))
             if i2 == (aOpposite,i1[1] + conf['bounds']['step'],i1[2]):
-                print('in')
                 total += abs(int(i2[1] * J) - int(i1[1] * J)) * i2[2]
                 # remove fee
                 aFee = int(i2[1] * i2[2] * fee * J)
