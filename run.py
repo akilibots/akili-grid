@@ -3,7 +3,8 @@ import json
 import requests
 import urllib
 import websocket
-from os import environ
+import sys
+
 from bisect import bisect
 
 from dydx3 import Client
@@ -52,7 +53,7 @@ def log(msg):
 def createOrder(aSide, aSize, aPrice):
     global xchange
     global account
-    global trades
+
     conf = config()
 
     order = xchange.private.create_order(
@@ -74,7 +75,7 @@ def profit():
     global trades
     global user
 
-    fee = user['makerFeeRate']
+    fee = float(user['makerFeeRate'])
     conf = config()
     aFee = 0
 
@@ -95,11 +96,12 @@ def profit():
                 # remove fee
                 aFee = int(i2[1] * i2[2] * fee * J)
                 aFee += int(i1[1] * i1[2] * fee * J)
+                total -= aFee
 
                 matcher.remove(i2)
                 break
 
-    log(f'Total profit 💰 {total/J} - fee {aFee/J} = {(total - aFee)/J}')
+    log(f'Total profit 💰 {total/J}')
 
 
 def ws_open(ws):
