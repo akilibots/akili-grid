@@ -3,7 +3,7 @@ import json
 import requests
 import urllib
 import websocket
-import sys
+import threading
 
 from bisect import bisect
 
@@ -30,24 +30,26 @@ trades = []
 user = None
 
 
-def log(msg):
-    conf = config()
-    msg = conf['main']['name'] + ':' + msg
-    print(datetime.datetime.now().isoformat(), msg)
+def log(aMsg):
+    def _log(msg):
+        conf = config()
+        msg = conf['main']['name'] + ':' + msg
+        print(datetime.datetime.now().isoformat(), msg)
 
-    if conf['telegram']['chatid'] == '' or conf['telegram']['bottoken'] == '':
-        return
+        if conf['telegram']['chatid'] == '' or conf['telegram']['bottoken'] == '':
+            return
 
-    params = {
-        'chat_id': conf['telegram']['chatid'],
-        'text': msg
-    }
-    payload_str = urllib.parse.urlencode(params, safe='@')
-    requests.get(
-        'https://api.telegram.org/bot' +
-        conf['telegram']['bottoken'] + '/sendMessage',
-        params=payload_str
-    )
+        params = {
+            'chat_id': conf['telegram']['chatid'],
+            'text': msg
+        }
+        payload_str = urllib.parse.urlencode(params, safe='@')
+        requests.get(
+            'https://api.telegram.org/bot' +
+            conf['telegram']['bottoken'] + '/sendMessage',
+            params=payload_str
+        )
+    threading.Thread(target=_log, args=[aMsg]).start()
 
 
 def createOrder(aSide, aSize, aPrice):
