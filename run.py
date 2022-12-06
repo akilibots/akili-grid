@@ -135,7 +135,7 @@ def ws_message(ws, message):
     foundFlag = False
     for order in message['contents']['orders']:
         if order['status'] != 'FILLED':
-            break
+            continue
 
         # Lets find the order that has been filled
         for j in grid:
