@@ -134,16 +134,14 @@ def ws_message(ws, message):
 
     foundFlag = False
     for order in message['contents']['orders']:
-        if order['status'] != 'FILLED':
-            continue
-
-        # Lets find the order that has been filled
-        for j in grid:
-            if grid[j] is not None:
-                if order['id'] == grid[j]['id']:
-                    foundFlag = True
-                    break
-
+        if order['status'] == 'FILLED':
+            # Lets find the order that has been filled
+            for j in grid:
+                if grid[j] is not None:
+                    if order['id'] == grid[j]['id']:
+                        foundFlag = True
+                        break
+                        
     if not foundFlag:
         return
 
