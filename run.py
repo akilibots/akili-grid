@@ -225,6 +225,7 @@ def on_ping(ws, message):
     conf = config()
     if conf['start']['price'] == 0:
         if beginOrder is not None:
+                # TODO: The starting order can be partially filled. We need to compare remainingSize and size
                 if beginOrder['status'] == 'PENDING':
                     log('Start order time out 😴 Exiting.')
                     xchange.private.cancel_order(beginOrder['id'])
