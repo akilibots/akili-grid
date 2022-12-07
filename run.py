@@ -4,6 +4,7 @@ import requests
 import urllib
 import websocket
 import threading
+import os
 
 from bisect import bisect
 
@@ -52,6 +53,37 @@ def log(aMsg):
     threading.Thread(target=_log, args=[aMsg]).start()
 
 
+def saveState():
+    global grid
+
+    # Update grid orders before saving
+    # TODO - get all orders in one batch to avoid calling get_order_by_id for each order
+    for order in grid:
+        if grid[order] is None:
+            continue
+        grid[order] = xchange.private.get_order_by_id(grid[order]['id']).data['order']
+    with open("data/state.json", "w") as f:
+        json.dump(grid, f)
+
+def loadState():
+    global grid
+    log('Check for saved state.')
+    if not os.path.isfile('data/state.json'):
+        log('No state saved. Start new.')
+        return False
+    
+    with open("data/state.json", "r") as f:
+        grid = json.load(f)
+    
+    # check if all orders are as we left them
+    for order in grid:
+        if grid[order] is None:
+            continue
+        if xchange.private.get_order_by_id(grid['order']['id']).data['order']['status'] != grid[order]['status']:
+            log('Orders changed can not start.')
+            exit()
+    return True
+ 
 def createOrder(aSide, aSize, aPrice):
     global xchange
     global account
@@ -146,10 +178,10 @@ def ws_message(ws, message):
         return
 
     if beginOrder is not None:
-            if order['id'] == beginOrder['id']:
-            # trigger order executed
-                log('Start order filled 🚀 We are in business!')
-                beginOrder = None
+        if order['id'] == beginOrder['id']:
+        # trigger order executed
+            log('Start order filled 🚀 We are in business!')
+            beginOrder = None
 
     orderType = grid[j]['side']
     orderPrice = grid[j]['price']
@@ -199,7 +231,8 @@ def ws_message(ws, message):
                 log('Error cancelling order, possibly already canceled. Moving on...')
             grid[i] = None
         numOrders += 1
-
+    
+    saveState()
 
 def ws_close(ws, p2, p3):
     global grid
@@ -304,6 +337,7 @@ def main():
 
     grid[x] = createOrder(startOrder, conf['start']['size'], price)
     beginOrder = grid[x]
+    saveState()
 
     # websocket.enableTrace(True)
     wsapp = websocket.WebSocketApp(

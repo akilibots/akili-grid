@@ -6,7 +6,7 @@ def config():
 
     conf = os.getenv('strategy')
     if conf is None:
-        with open('strategy/strategy.json') as f:
+        with open('data/strategy.json') as f:
             conf = f.read()
     return(json.loads(conf))
     

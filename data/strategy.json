@@ -1,0 +1,29 @@
+{
+    "main": {
+      "name": "BTC",
+      "market": "BTC-USD"
+    },
+    
+    "dydx": {
+        "APIkey": "API key here. See https://twitter.com/ChrisJangita/status/1593531663597723648",
+        "APIsecret": "API secret here. See https://twitter.com/ChrisJangita/status/1593531663597723648",
+        "APIpassphrase": "API passphrase here. See https://twitter.com/ChrisJangita/status/1593531663597723648",
+        "stark_private_key": "As above. See https://twitter.com/ChrisJangita/status/1593531663597723648",
+        "default_ethereum_address": "See https://twitter.com/ChrisJangita/status/1593531663597723648"
+    },
+    
+    "orders": { "above": 1, "below": 1, "size": 0.05},
+    
+    "bounds": { "low": 15500, "high": 17500, "step": 25 },
+    
+    "start": {
+      "price": 0,
+      "size": 0.05,
+      "order": "buy"
+    },
+    
+    "stop": { "price": 0 },
+    
+    "telegram": { "chatid": "", "bottoken": "" }
+  }
+  
