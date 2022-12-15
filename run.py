@@ -17,7 +17,7 @@ from config import config
 
 
 # Constants
-TO_INT = 1000000000 # Based on the number of decimals in the market
+TO_INT = 1000000000  # Based on the number of decimals in the market
 GOOD_TILL = 31536000
 
 # Global Vars
@@ -64,15 +64,17 @@ def save_state():
     for row in grid:
         if grid[row] is None:
             continue
-        grid[row] = xchange.private.get_order_by_id(grid[row]['id']).data['order']
+        grid[row] = xchange.private.get_order_by_id(
+            grid[row]['id']).data['order']
 
     save_data = {
         'grid': grid,
-        'trades' : trades
+        'trades': trades
     }
 
     with open("data/state.json", "w") as f:
         json.dump(save_data, f)
+
 
 def load_state():
     global grid
@@ -81,7 +83,7 @@ def load_state():
     if not os.path.isfile('data/state.json'):
         log('No state saved. Start new.')
         return False
-    
+
     with open("data/state.json", "r") as f:
         load_data = json.load(f)
     log('State loaded.')
@@ -89,14 +91,15 @@ def load_state():
     trades = load_data['trades'].copy()
 
     # check if all orders are as we left them
-    #for order in grid:
+    # for order in grid:
     #    if grid[order] is None:
     #        continue
     #    if xchange.private.get_order_by_id(grid['order']['id']).data['order']['status'] != grid[order]['status']:
     #        log('Orders changed can not start.')
     #        exit()
     return True
- 
+
+
 def place_order(side, size, price):
     global xchange
     global account
@@ -118,6 +121,7 @@ def place_order(side, size, price):
     log(f'{side} order placed at {price} ')
     return order
 
+
 def profit():
     global trades
     global user
@@ -129,16 +133,16 @@ def profit():
     matcher = trades.copy()
     total = 0
 
-    while len(matcher)>0:
+    while len(matcher) > 0:
 
         i1 = matcher[0]
-        side = i1[0] # buy or sell
+        side = i1[0]  # buy or sell
         opposite = 'sell' if side == 'buy' else 'buy'
 
         # lets look for corresponding opposite order
         matcher.remove(i1)
         for i2 in matcher:
-            if i2 == (opposite,i1[1] + conf['bounds']['step'],i1[2]):
+            if i2 == (opposite, i1[1] + conf['bounds']['step'], i1[2]):
                 total += abs(int(i2[1] * TO_INT) - int(i1[1] * TO_INT)) * i2[2]
                 # remove fee
                 fee = int(i2[1] * i2[2] * xchange_fee * TO_INT)
@@ -186,8 +190,10 @@ def ws_message(ws, message):
             for cancelled_order in grid:
                 if grid[cancelled_order] is not None:
                     if grid[cancelled_order]['id'] == order['id']:
-                        log(f'Recreating cancelled 😡 {grid[cancelled_order]["side"]} order at {grid[cancelled_order]["price"]}')
-                        grid[cancelled_order] = place_order(grid[cancelled_order]['side'], grid[cancelled_order]['size'], grid[cancelled_order]['price'])
+                        log(
+                            f'Recreating cancelled 😡 {grid[cancelled_order]["side"]} order at {grid[cancelled_order]["price"]}')
+                        grid[cancelled_order] = place_order(
+                            grid[cancelled_order]['side'], grid[cancelled_order]['size'], grid[cancelled_order]['price'])
             # Save any re-instated orders
             save_state()
 
@@ -206,7 +212,7 @@ def ws_message(ws, message):
 
     if begin_order is not None:
         if order['id'] == begin_order['id']:
-        # Start order filled
+            # Start order filled
             log('Start order filled 🚀')
             begin_order = None
 
@@ -214,8 +220,8 @@ def ws_message(ws, message):
     order_price = grid[filled_order]['price']
     order_size = grid[filled_order]['size']
     log(F'{order_type} filled 🥧 at {order_price}')
-    trades.append((order_type.lower(),float(order_price),float(order_size)))
-    
+    trades.append((order_type.lower(), float(order_price), float(order_size)))
+
     profit()
 
     # found it, let's build around it
@@ -225,12 +231,13 @@ def ws_message(ws, message):
     num_orders = 0
     step = int(conf['bounds']['step'] * TO_INT)
     high_order = int(conf['bounds']['high'] * TO_INT)
-    
-    for i in range(filled_order + step, high_order  + step, step):
+
+    for i in range(filled_order + step, high_order + step, step):
         if i in grid:
             if num_orders < conf['orders']['above'] and grid[i] is None:
-                    price = i / TO_INT
-                    grid[i] = place_order(ORDER_SIDE_SELL, conf['orders']['size'], price)
+                price = i / TO_INT
+                grid[i] = place_order(
+                    ORDER_SIDE_SELL, conf['orders']['size'], price)
 
             if num_orders >= conf['orders']['above'] and grid[i] is not None:
                 order_type = grid[i]['side']
@@ -251,7 +258,8 @@ def ws_message(ws, message):
         if i in grid:
             if num_orders < conf['orders']['below'] and grid[i] is None:
                 price = i / TO_INT
-                grid[i] = place_order(ORDER_SIDE_BUY, conf['orders']['size'], price)
+                grid[i] = place_order(
+                    ORDER_SIDE_BUY, conf['orders']['size'], price)
 
             if num_orders >= conf['orders']['below'] and grid[i] is not None:
                 order_type = grid[i]['side']
@@ -263,8 +271,9 @@ def ws_message(ws, message):
                     log('Cancel order error 🤔')
                 grid[i] = None
             num_orders += 1
-    
+
     save_state()
+
 
 def ws_close(ws, p2, p3):
     global grid
@@ -279,20 +288,22 @@ def ws_close(ws, p2, p3):
             xchange.private.cancel_order(grid[i]['id'])
             grid[i] = None
 
+
 def on_ping(ws, message):
     global user
-    global begin_order        
+    global begin_order
     # To keep connection API active
     user = xchange.private.get_user().data['user']
 
     conf = config()
     if conf['start']['price'] == 0:
         if begin_order is not None:
-                # TODO: The starting order can be partially filled. We need to compare remainingSize and size
-                if begin_order['status'] == 'PENDING':
-                    log('Start order time out 😴 Exiting.')
-                    xchange.private.cancel_order(begin_order['id'])
-                    ws.close()
+            # TODO: The starting order can be partially filled. We need to compare remainingSize and size
+            if begin_order['status'] == 'PENDING':
+                log('Start order time out 😴 Exiting.')
+                xchange.private.cancel_order(begin_order['id'])
+                os.remove('data/state.json')
+                ws.close()
 
 
 def main():
@@ -304,7 +315,6 @@ def main():
     global begin_order
     global user
 
- 
     startTime = datetime.datetime.now()
     conf = config()
 
@@ -322,7 +332,7 @@ def main():
         stark_private_key=conf['dydx']['stark_private_key'],
         default_ethereum_address=conf['dydx']['default_ethereum_address'],
     )
-    
+
     signature_time = generate_now_iso()
     signature = xchange.private.sign(
         request_path='/ws/accounts',
@@ -346,9 +356,9 @@ def main():
                 int(conf['bounds']['step'] * TO_INT)):
             grid[price_index] = None
 
-        
-        if conf['start']['price'] == 0: # zero means start at market price
-            orderBook = xchange.public.get_orderbook(conf['main']['market']).data
+        if conf['start']['price'] == 0:  # zero means start at market price
+            orderBook = xchange.public.get_orderbook(
+                conf['main']['market']).data
             ask = float(orderBook['asks'][0]['price'])
             bid = float(orderBook['bids'][0]['price'])
             price = (ask + bid) / 2
@@ -369,7 +379,8 @@ def main():
 
         price = price_index / TO_INT
 
-        grid[price_index] = place_order(startOrder, conf['start']['size'], price)
+        grid[price_index] = place_order(
+            startOrder, conf['start']['size'], price)
         begin_order = grid[price_index]
         save_state()
 
