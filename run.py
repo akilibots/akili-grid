@@ -34,7 +34,7 @@ user = None
 def log(msg):
     def _log(_msg):
         conf = config()
-        msg = conf['main']['name'] + ':' + _msg
+        _msg = conf['main']['name'] + ':' + _msg
         print(datetime.datetime.now().isoformat(), _msg)
 
         if conf['telegram']['chatid'] == '' or conf['telegram']['bottoken'] == '':
@@ -185,7 +185,7 @@ def ws_message(ws, message):
             for cancelled_order in grid:
                 if grid[cancelled_order] is not None:
                     if grid[cancelled_order]['id'] == order['id']:
-                        log(f'Recreating cancelled 😡 {grid[cancelled_order]["side"]}  order at {grid[cancelled_order]["price"]}')
+                        log(f'Recreating cancelled 😡 {grid[cancelled_order]["side"]} order at {grid[cancelled_order]["price"]}')
                         grid[cancelled_order] = place_order(grid[cancelled_order]['side'], grid[cancelled_order]['size'], grid[cancelled_order]['price'])
 
     found_flag = False
@@ -204,13 +204,13 @@ def ws_message(ws, message):
     if begin_order is not None:
         if order['id'] == begin_order['id']:
         # Start order filled
-            log('Start order filled 🚀!')
+            log('Start order filled 🚀')
             begin_order = None
 
     order_type = grid[filled_order]['side']
     order_price = grid[filled_order]['price']
     order_size = grid[filled_order]['size']
-    log(F'{order_type} order filled at {order_price}')
+    log(F'{order_type} filled 🥧 at {order_price}')
     trades.append((order_type.lower(),float(order_price),float(order_size)))
     
     profit()
@@ -237,7 +237,7 @@ def ws_message(ws, message):
                 try:
                     xchange.private.cancel_order(grid[i]['id'])
                 except:
-                    log('Cancel order error 😡 manually canceled?')
+                    log('Error 😡 manually canceled?')
                 grid[i] = None
             num_orders += 1
 
@@ -258,7 +258,7 @@ def ws_message(ws, message):
                 try:
                     xchange.private.cancel_order(grid[i]['id'])
                 except:
-                    log('Error cancelling order, possibly already canceled. Moving on...')
+                    log('Cancel order error 🤔')
                 grid[i] = None
             num_orders += 1
     
@@ -337,12 +337,12 @@ def main():
         # New grid
         log('Start grid.')
 
-        for x in range(
+        for price_index in range(
                 int(conf['bounds']['low'] * TO_INT),
                 int(conf['bounds']['high'] * TO_INT) +
             int(conf['bounds']['step'] * TO_INT),
                 int(conf['bounds']['step'] * TO_INT)):
-            grid[x] = None
+            grid[price_index] = None
 
         
         if conf['start']['price'] == 0: # zero means start at market price
@@ -359,16 +359,16 @@ def main():
 
         if conf['start']['order'] == 'buy':
             startOrder = ORDER_SIDE_BUY
-            x = location - int(conf['bounds']['step'] * TO_INT)
+            price_index = location - int(conf['bounds']['step'] * TO_INT)
 
         if conf['start']['order'] == 'sell':
             startOrder = ORDER_SIDE_SELL
-            x = location
+            price_index = location
 
-        price = x / TO_INT
+        price = price_index / TO_INT
 
-        grid[x] = place_order(startOrder, conf['start']['size'], price)
-        begin_order = grid[x]
+        grid[price_index] = place_order(startOrder, conf['start']['size'], price)
+        begin_order = grid[price_index]
         save_state()
 
     # websocket.enableTrace(True)
