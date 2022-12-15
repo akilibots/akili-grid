@@ -180,8 +180,8 @@ def ws_message(ws, message):
         return
 
     for order in message['contents']['orders']:
-        if order['status'] == 'CANCELLED':
-            # Reinstate ALL cancelled orders
+        if order['status'] == 'CANCELED':
+            # Reinstate ALL cancelled orders (CANCELED is mis-spelt smh Americans!!)
             for cancelled_order in grid:
                 if grid[cancelled_order] is not None:
                     if grid[cancelled_order]['id'] == order['id']:
