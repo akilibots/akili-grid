@@ -5,6 +5,7 @@ import urllib
 import websocket
 import threading
 import os
+import time
 
 from bisect import bisect
 
@@ -17,7 +18,7 @@ from config import config
 
 # Constants
 TO_INT = 1000000000 # Based on the number of decimals in the market
-GOOD_TILL = 1672531200
+GOOD_TILL = 31536000
 
 # Global Vars
 xchange = None
@@ -83,7 +84,7 @@ def load_state():
     
     with open("data/state.json", "r") as f:
         load_data = json.load(f)
-    
+    log('State loaded.')
     grid = load_data['grid'].copy()
     trades = load_data['trades'].copy()
 
@@ -111,10 +112,10 @@ def place_order(side, size, price):
         size=str(size),
         price=str(price),
         limit_fee='0.1',
-        expiration_epoch_seconds=GOOD_TILL,
+        expiration_epoch_seconds=int(time.time()) + GOOD_TILL,
     ).data['order']
 
-    log(f'{size} order placed at {price} ')
+    log(f'{side} order placed at {price} ')
     return order
 
 def profit():
@@ -187,6 +188,8 @@ def ws_message(ws, message):
                     if grid[cancelled_order]['id'] == order['id']:
                         log(f'Recreating cancelled 😡 {grid[cancelled_order]["side"]} order at {grid[cancelled_order]["price"]}')
                         grid[cancelled_order] = place_order(grid[cancelled_order]['side'], grid[cancelled_order]['size'], grid[cancelled_order]['price'])
+            # Save any re-instated orders
+            save_state()
 
     found_flag = False
     for order in message['contents']['orders']:
@@ -221,10 +224,9 @@ def ws_message(ws, message):
     # Build sell orders upwards to highest order
     num_orders = 0
     step = int(conf['bounds']['step'] * TO_INT)
-    start_order = filled_order + step
-    high_order = int(conf['bounds']['high'] * TO_INT) + step
+    high_order = int(conf['bounds']['high'] * TO_INT)
     
-    for i in range(start_order, high_order, step):
+    for i in range(filled_order + step, high_order  + step, step):
         if i in grid:
             if num_orders < conf['orders']['above'] and grid[i] is None:
                     price = i / TO_INT
@@ -237,7 +239,7 @@ def ws_message(ws, message):
                 try:
                     xchange.private.cancel_order(grid[i]['id'])
                 except:
-                    log('Error 😡 manually canceled?')
+                    log('Cancel order error 🤔')
                 grid[i] = None
             num_orders += 1
 
