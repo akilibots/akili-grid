@@ -16,7 +16,7 @@ from config import config
 
 
 # Constants
-J = 10000000000
+TO_INT = 1000000000 # Based on the number of decimals in the market
 GOOD_TILL = 1672531200
 
 # Global Vars
@@ -26,23 +26,23 @@ signature_time = None
 grid = {}
 account = None
 wait = 0
-beginOrder = None
+begin_order = None
 trades = []
 user = None
 
 
-def log(aMsg):
-    def _log(msg):
+def log(msg):
+    def _log(_msg):
         conf = config()
-        msg = conf['main']['name'] + ':' + msg
-        print(datetime.datetime.now().isoformat(), msg)
+        msg = conf['main']['name'] + ':' + _msg
+        print(datetime.datetime.now().isoformat(), _msg)
 
         if conf['telegram']['chatid'] == '' or conf['telegram']['bottoken'] == '':
             return
 
         params = {
             'chat_id': conf['telegram']['chatid'],
-            'text': msg
+            'text': _msg
         }
         payload_str = urllib.parse.urlencode(params, safe='@')
         requests.get(
@@ -50,41 +50,53 @@ def log(aMsg):
             conf['telegram']['bottoken'] + '/sendMessage',
             params=payload_str
         )
-    threading.Thread(target=_log, args=[aMsg]).start()
+    threading.Thread(target=_log, args=[msg]).start()
 
 
-def saveState():
+def save_state():
+    # Save state of grid so that it can resume in case it dies for some reason
     global grid
+    global trades
 
     # Update grid orders before saving
     # TODO - get all orders in one batch to avoid calling get_order_by_id for each order
-    for order in grid:
-        if grid[order] is None:
+    for row in grid:
+        if grid[row] is None:
             continue
-        grid[order] = xchange.private.get_order_by_id(grid[order]['id']).data['order']
-    with open("data/state.json", "w") as f:
-        json.dump(grid, f)
+        grid[row] = xchange.private.get_order_by_id(grid[row]['id']).data['order']
 
-def loadState():
+    save_data = {
+        'grid': grid,
+        'trades' : trades
+    }
+
+    with open("data/state.json", "w") as f:
+        json.dump(save_data, f)
+
+def load_state():
     global grid
+    global trades
     log('Check for saved state.')
     if not os.path.isfile('data/state.json'):
         log('No state saved. Start new.')
         return False
     
     with open("data/state.json", "r") as f:
-        grid = json.load(f)
+        load_data = json.load(f)
     
+    grid = load_data['grid'].copy()
+    trades = load_data['trades'].copy()
+
     # check if all orders are as we left them
-    for order in grid:
-        if grid[order] is None:
-            continue
-        if xchange.private.get_order_by_id(grid['order']['id']).data['order']['status'] != grid[order]['status']:
-            log('Orders changed can not start.')
-            exit()
+    #for order in grid:
+    #    if grid[order] is None:
+    #        continue
+    #    if xchange.private.get_order_by_id(grid['order']['id']).data['order']['status'] != grid[order]['status']:
+    #        log('Orders changed can not start.')
+    #        exit()
     return True
  
-def createOrder(aSide, aSize, aPrice):
+def place_order(side, size, price):
     global xchange
     global account
 
@@ -93,25 +105,25 @@ def createOrder(aSide, aSize, aPrice):
     order = xchange.private.create_order(
         position_id=account['positionId'],
         market=conf['main']['market'],
-        side=aSide,
+        side=side,
         order_type=ORDER_TYPE_LIMIT,
         post_only=False,
-        size=str(aSize),
-        price=str(aPrice),
+        size=str(size),
+        price=str(price),
         limit_fee='0.1',
         expiration_epoch_seconds=GOOD_TILL,
     ).data['order']
 
-    log(f'{aSide} order placed at {aPrice} ')
+    log(f'{size} order placed at {price} ')
     return order
 
 def profit():
     global trades
     global user
 
-    fee = float(user['makerFeeRate'])
+    xchange_fee = float(user['makerFeeRate'])
     conf = config()
-    aFee = 0
+    fee = 0
 
     matcher = trades.copy()
     total = 0
@@ -119,23 +131,23 @@ def profit():
     while len(matcher)>0:
 
         i1 = matcher[0]
-        aSide = i1[0] # buy or sell
-        aOpposite = 'sell' if aSide == 'buy' else 'buy'
+        side = i1[0] # buy or sell
+        opposite = 'sell' if side == 'buy' else 'buy'
 
         # lets look for corresponding opposite order
         matcher.remove(i1)
         for i2 in matcher:
-            if i2 == (aOpposite,i1[1] + conf['bounds']['step'],i1[2]):
-                total += abs(int(i2[1] * J) - int(i1[1] * J)) * i2[2]
+            if i2 == (opposite,i1[1] + conf['bounds']['step'],i1[2]):
+                total += abs(int(i2[1] * TO_INT) - int(i1[1] * TO_INT)) * i2[2]
                 # remove fee
-                aFee = int(i2[1] * i2[2] * fee * J)
-                aFee += int(i1[1] * i1[2] * fee * J)
-                total -= aFee
+                fee = int(i2[1] * i2[2] * xchange_fee * TO_INT)
+                fee += int(i1[1] * i1[2] * xchange_fee * TO_INT)
+                total -= fee
 
                 matcher.remove(i2)
                 break
 
-    log(f'Total profit 💰 {total/J}')
+    log(f'Total profit 💰 {total/TO_INT}')
 
 
 def ws_open(ws):
@@ -153,86 +165,104 @@ def ws_open(ws):
 
 
 def ws_message(ws, message):
+    # Process order book updates
     global grid
-    global beginOrder
+    global begin_order
     conf = config()
 
     message = json.loads(message)
     if message['type'] != 'channel_data':
+        # Not an order book update
         return
 
     if len(message['contents']['orders']) == 0:
+        # No orders to process
         return
 
-    foundFlag = False
+    for order in message['contents']['orders']:
+        if order['status'] == 'CANCELLED':
+            # Reinstate ALL cancelled orders
+            for cancelled_order in grid:
+                if grid[cancelled_order] is not None:
+                    if grid[cancelled_order]['id'] == order['id']:
+                        log(f'Recreating cancelled 😡 {grid[cancelled_order]["side"]}  order at {grid[cancelled_order]["price"]}')
+                        grid[cancelled_order] = place_order(grid[cancelled_order]['side'], grid[cancelled_order]['size'], grid[cancelled_order]['price'])
+
+    found_flag = False
     for order in message['contents']['orders']:
         if order['status'] == 'FILLED':
             # Lets find the order that has been filled
-            for j in grid:
-                if grid[j] is not None:
-                    if order['id'] == grid[j]['id']:
-                        foundFlag = True
+            for filled_order in grid:
+                if grid[filled_order] is not None:
+                    if grid[filled_order]['id'] == order['id']:
+                        found_flag = True
                         break
-                        
-    if not foundFlag:
+    if not found_flag:
+        # Not one of our orders
         return
 
-    if beginOrder is not None:
-        if order['id'] == beginOrder['id']:
-        # trigger order executed
-            log('Start order filled 🚀 We are in business!')
-            beginOrder = None
+    if begin_order is not None:
+        if order['id'] == begin_order['id']:
+        # Start order filled
+            log('Start order filled 🚀!')
+            begin_order = None
 
-    orderType = grid[j]['side']
-    orderPrice = grid[j]['price']
-    orderSize = grid[j]['size']
-    log(F'{orderType} order filled at {orderPrice}')
-    trades.append((orderType.lower(),float(orderPrice),float(orderSize)))
+    order_type = grid[filled_order]['side']
+    order_price = grid[filled_order]['price']
+    order_size = grid[filled_order]['size']
+    log(F'{order_type} order filled at {order_price}')
+    trades.append((order_type.lower(),float(order_price),float(order_size)))
     
     profit()
 
     # found it, let's build around it
-    grid[j] = None
+    grid[filled_order] = None
 
-    x = j
-
-    numOrders = 0
-    for i in range(j + int(conf['bounds']['step'] * J), int(conf['bounds']['high'] * J) + int(conf['bounds']['step'] * J), int(conf['bounds']['step'] * J)):
-        if numOrders < conf['orders']['above'] and grid[i] is None:
-            price = i / J
-            grid[i] = createOrder(ORDER_SIDE_SELL, conf['orders']['size'], price)
-
-        if numOrders >= conf['orders']['above'] and grid[i] is not None:
-            orderType = grid[i]['side']
-            orderPrice = grid[i]['price']
-            log(f'Cancel {orderType} above at {orderPrice}')
-            try:
-                xchange.private.cancel_order(grid[i]['id'])
-            except:
-                log('Cancel order error 😡 manually canceled?')
-            grid[i] = None
-        numOrders += 1
-
-    j = x
-
-    numOrders = 0
-    for i in range(j - int(conf['bounds']['step'] * J), int(conf['bounds']['low'] * J) - int(conf['bounds']['step'] * J), int(-conf['bounds']['step'] * J)):
-        if numOrders < conf['orders']['below'] and grid[i] is None:
-            price = i / J
-            grid[i] = createOrder(ORDER_SIDE_BUY, conf['orders']['size'], price)
-
-        if numOrders >= conf['orders']['below'] and grid[i] is not None:
-            orderType = grid[i]['side']
-            orderPrice = grid[i]['price']
-            log(f'Cancel {orderType} order below at {orderPrice}')
-            try:
-                xchange.private.cancel_order(grid[i]['id'])
-            except:
-                log('Error cancelling order, possibly already canceled. Moving on...')
-            grid[i] = None
-        numOrders += 1
+    # Build sell orders upwards to highest order
+    num_orders = 0
+    step = int(conf['bounds']['step'] * TO_INT)
+    start_order = filled_order + step
+    high_order = int(conf['bounds']['high'] * TO_INT) + step
     
-    saveState()
+    for i in range(start_order, high_order, step):
+        if i in grid:
+            if num_orders < conf['orders']['above'] and grid[i] is None:
+                    price = i / TO_INT
+                    grid[i] = place_order(ORDER_SIDE_SELL, conf['orders']['size'], price)
+
+            if num_orders >= conf['orders']['above'] and grid[i] is not None:
+                order_type = grid[i]['side']
+                order_price = grid[i]['price']
+                log(f'Cancel {order_type} above at {order_price}')
+                try:
+                    xchange.private.cancel_order(grid[i]['id'])
+                except:
+                    log('Cancel order error 😡 manually canceled?')
+                grid[i] = None
+            num_orders += 1
+
+    num_orders = 0
+
+    low_order = int(conf['bounds']['low'] * TO_INT)
+    # Build buy orders downwards to lowest order
+    for i in range(filled_order - step, low_order - step, -step):
+        if i in grid:
+            if num_orders < conf['orders']['below'] and grid[i] is None:
+                price = i / TO_INT
+                grid[i] = place_order(ORDER_SIDE_BUY, conf['orders']['size'], price)
+
+            if num_orders >= conf['orders']['below'] and grid[i] is not None:
+                order_type = grid[i]['side']
+                order_price = grid[i]['price']
+                log(f'Cancel {order_type} order below at {order_price}')
+                try:
+                    xchange.private.cancel_order(grid[i]['id'])
+                except:
+                    log('Error cancelling order, possibly already canceled. Moving on...')
+                grid[i] = None
+            num_orders += 1
+    
+    save_state()
 
 def ws_close(ws, p2, p3):
     global grid
@@ -240,26 +270,26 @@ def ws_close(ws, p2, p3):
     log('Grid terminated by user.')
     for i in grid:
         if grid[i] is not None:
-            orderType = grid[i]['side']
-            orderPrice = grid[i]['price']
+            order_type = grid[i]['side']
+            order_price = grid[i]['price']
 
-            log(f'Cancelling {orderType} order at {orderPrice}')
+            log(f'Cancelling {order_type} order at {order_price}')
             xchange.private.cancel_order(grid[i]['id'])
             grid[i] = None
 
 def on_ping(ws, message):
     global user
-    global beginOrder        
+    global begin_order        
     # To keep connection API active
     user = xchange.private.get_user().data['user']
 
     conf = config()
     if conf['start']['price'] == 0:
-        if beginOrder is not None:
+        if begin_order is not None:
                 # TODO: The starting order can be partially filled. We need to compare remainingSize and size
-                if beginOrder['status'] == 'PENDING':
+                if begin_order['status'] == 'PENDING':
                     log('Start order time out 😴 Exiting.')
-                    xchange.private.cancel_order(beginOrder['id'])
+                    xchange.private.cancel_order(begin_order['id'])
                     ws.close()
 
 
@@ -269,7 +299,7 @@ def main():
     global signature_time
     global grid
     global account
-    global beginOrder
+    global begin_order
     global user
 
  
@@ -303,41 +333,43 @@ def main():
     account = xchange.private.get_account().data['account']
     user = xchange.private.get_user().data['user']
 
-    log('Grid build.')
+    if not load_state():
+        # New grid
+        log('Start grid.')
 
-    for x in range(
-            int(conf['bounds']['low'] * J),
-            int(conf['bounds']['high'] * J) +
-        int(conf['bounds']['step'] * J),
-            int(conf['bounds']['step'] * J)):
-        grid[x] = None
+        for x in range(
+                int(conf['bounds']['low'] * TO_INT),
+                int(conf['bounds']['high'] * TO_INT) +
+            int(conf['bounds']['step'] * TO_INT),
+                int(conf['bounds']['step'] * TO_INT)):
+            grid[x] = None
 
-    
-    if conf['start']['price'] == 0: # zero means start at market price
-        orderBook = xchange.public.get_orderbook(conf['main']['market']).data
-        ask = float(orderBook['asks'][0]['price'])
-        bid = float(orderBook['bids'][0]['price'])
-        price = (ask + bid) / 2
-    else:
-        price = conf['start']['price']
+        
+        if conf['start']['price'] == 0: # zero means start at market price
+            orderBook = xchange.public.get_orderbook(conf['main']['market']).data
+            ask = float(orderBook['asks'][0]['price'])
+            bid = float(orderBook['bids'][0]['price'])
+            price = (ask + bid) / 2
+        else:
+            price = conf['start']['price']
 
-    log('Place start order.')
-    # location = gridline above current price
-    location = list(grid)[bisect(list(grid), price*J)]
+        log('Place start order.')
+        # location = gridline above current price
+        location = list(grid)[bisect(list(grid), price*TO_INT)]
 
-    if conf['start']['order'] == 'buy':
-        startOrder = ORDER_SIDE_BUY
-        x = location - int(conf['bounds']['step'] * J)
+        if conf['start']['order'] == 'buy':
+            startOrder = ORDER_SIDE_BUY
+            x = location - int(conf['bounds']['step'] * TO_INT)
 
-    if conf['start']['order'] == 'sell':
-        startOrder = ORDER_SIDE_SELL
-        x = location
+        if conf['start']['order'] == 'sell':
+            startOrder = ORDER_SIDE_SELL
+            x = location
 
-    price = x / J
+        price = x / TO_INT
 
-    grid[x] = createOrder(startOrder, conf['start']['size'], price)
-    beginOrder = grid[x]
-    saveState()
+        grid[x] = place_order(startOrder, conf['start']['size'], price)
+        begin_order = grid[x]
+        save_state()
 
     # websocket.enableTrace(True)
     wsapp = websocket.WebSocketApp(

@@ -279,3 +279,4 @@ $RECYCLE.BIN/
 # akiligrid specific ignores
 # ignore developer settings folder
 dev/
+data/state.json
