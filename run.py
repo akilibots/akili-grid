@@ -278,15 +278,17 @@ def ws_message(ws, message):
 def ws_close(ws, p2, p3):
     global grid
 
-    log('Grid terminated by user.')
-    for i in grid:
-        if grid[i] is not None:
-            order_type = grid[i]['side']
-            order_price = grid[i]['price']
+    log('NO, not going to bed 🛌')
+    save_state()
+    #log('Grid terminated by user.')
+    #for i in grid:
+    #    if grid[i] is not None:
+    #        order_type = grid[i]['side']
+    #        order_price = grid[i]['price']
 
-            log(f'Cancelling {order_type} order at {order_price}')
-            xchange.private.cancel_order(grid[i]['id'])
-            grid[i] = None
+    #        log(f'Cancelling {order_type} order at {order_price}')
+    #        xchange.private.cancel_order(grid[i]['id'])
+    #        grid[i] = None
 
 
 def on_ping(ws, message):
