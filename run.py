@@ -123,37 +123,37 @@ def place_order(side, size, price):
 
 
 def profit():
-    global trades
-    global user
+    pass
+    # global trades
+    # global user
 
-    xchange_fee = float(user['makerFeeRate'])
-    conf = config()
-    fee = 0
+    # xchange_fee = float(user['makerFeeRate'])
+    # conf = config()
+    # fee = 0
 
-    matcher = trades.copy()
-    total = 0
+    # matcher = trades.copy()
+    # total = 0
 
-    while len(matcher) > 0:
+    # while len(matcher) > 0:
 
-        i1 = matcher[0]
-        side = i1[0]  # buy or sell
-        opposite = 'sell' if side == 'buy' else 'buy'
+    #     i1 = matcher[0]
+    #     side = i1['side']  # buy or sell
+    #     opposite = 'sell' if side == 'buy' else 'buy'
 
-        # lets look for corresponding opposite order
-        matcher.remove(i1)
-        for i2 in matcher:
-            if i2 == (opposite, i1[1] + conf['bounds']['step'], i1[2]):
-                total += abs(int(i2[1] * TO_INT) - int(i1[1] * TO_INT)) * i2[2]
-                # remove fee
-                fee = int(i2[1] * i2[2] * xchange_fee * TO_INT)
-                fee += int(i1[1] * i1[2] * xchange_fee * TO_INT)
-                total -= fee
+    #     # lets look for corresponding opposite order
+    #     matcher.remove(i1)
+    #     for i2 in matcher:
+    #         if i2 == (opposite, i1['price'] + conf['bounds']['step'], i1['size']):
+    #             total += abs(int(i2['price'] * TO_INT) - int(i1['price'] * TO_INT)) * i2['size']
+    #             # remove fee
+    #             fee = int(i2['price'] * i2['size'] * xchange_fee * TO_INT)
+    #             fee += int(i1['price'] * i1['size'] * xchange_fee * TO_INT)
+    #             total -= fee
 
-                matcher.remove(i2)
-                break
+    #             matcher.remove(i2)
+    #             break
 
-    log(f'Total profit 💰 {total/TO_INT}')
-
+    # log(f'Total profit 💰 {total/TO_INT}')
 
 def ws_open(ws):
     # Subscribe to order book updates
@@ -220,7 +220,7 @@ def ws_message(ws, message):
     order_price = grid[filled_order]['price']
     order_size = grid[filled_order]['size']
     log(F'{order_type} filled 🥧 at {order_price}')
-    trades.append((order_type.lower(), float(order_price), float(order_size)))
+    trades.append({'price':float(order_price), 'size':-float(order_size) if order_type=='BUY' else float(order_size)})
 
     profit()
 
