@@ -8,6 +8,7 @@ import os
 import time
 
 from bisect import bisect
+from decimal import Decimal
 
 from dydx3 import Client
 from dydx3.constants import *
@@ -123,37 +124,40 @@ def place_order(side, size, price):
 
 
 def profit():
-    pass
-    # global trades
-    # global user
+    global trades
+    global user
 
-    # xchange_fee = float(user['makerFeeRate'])
-    # conf = config()
-    # fee = 0
+    xchange_fee = Decimal(user['makerFeeRate'])
+    conf = config()
+    step = Decimal(str(conf['bounds']['step']))
+    total = Decimal('0')
+    fee = Decimal('0')
+    calc = trades.copy()
 
-    # matcher = trades.copy()
-    # total = 0
+    while len(calc)>0:
+        open_trade = calc[0]
+        calc.remove(open_trade)
+        open_trade['price'] = Decimal(str(open_trade['price']))
+        open_trade['size'] = Decimal(str(open_trade['size']))
+        for close_trade in calc:
+            close_trade['price'] = Decimal(str(close_trade['price']))
+            close_trade['size'] = Decimal(str(close_trade['size']))
+            if open_trade['size'] < 0: # this is a buy order, find corresponding sell order
+                if close_trade == {'price':open_trade['price'] + step, 'size':-open_trade['size']}:
+                    total += step * close_trade['size']
+                    fee = close_trade['size'] * xchange_fee
+                    total -= (fee * 2)
+                    calc.remove(close_trade)
+                    break
+            if open_trade['size'] > 0: # this is a sell order, find corresponding buy order
+                if close_trade == {'price':open_trade['price'] - step, 'size':-open_trade['size']}:
+                    total += step * -close_trade['size']
+                    fee = -close_trade['size'] * xchange_fee
+                    total -= (fee * 2)
+                    calc.remove(close_trade)
+                    break
 
-    # while len(matcher) > 0:
-
-    #     i1 = matcher[0]
-    #     side = i1['side']  # buy or sell
-    #     opposite = 'sell' if side == 'buy' else 'buy'
-
-    #     # lets look for corresponding opposite order
-    #     matcher.remove(i1)
-    #     for i2 in matcher:
-    #         if i2 == (opposite, i1['price'] + conf['bounds']['step'], i1['size']):
-    #             total += abs(int(i2['price'] * TO_INT) - int(i1['price'] * TO_INT)) * i2['size']
-    #             # remove fee
-    #             fee = int(i2['price'] * i2['size'] * xchange_fee * TO_INT)
-    #             fee += int(i1['price'] * i1['size'] * xchange_fee * TO_INT)
-    #             total -= fee
-
-    #             matcher.remove(i2)
-    #             break
-
-    # log(f'Total profit 💰 {total/TO_INT}')
+    log(f'Total profit 💰 {total}')
 
 def ws_open(ws):
     # Subscribe to order book updates
