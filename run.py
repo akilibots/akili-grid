@@ -60,6 +60,16 @@ def save_state():
     global grid
     global trades
 
+    class DecimalEncoder(json.JSONEncoder):
+        def default(self, obj):
+            # 👇️ if passed in object is instance of Decimal
+            # convert it to a string
+            if isinstance(obj, Decimal):
+                return str(obj)
+            # 👇️ otherwise use the default behavior
+            return json.JSONEncoder.default(self, obj)
+
+
     # Update grid orders before saving
     # TODO - get all orders in one batch to avoid calling get_order_by_id for each order
     for row in grid:
@@ -74,7 +84,7 @@ def save_state():
     }
 
     with open("data/state.json", "w") as f:
-        json.dump(save_data, f)
+        json.dump(save_data, f, cls=DecimalEncoder)
 
 
 def load_state():
