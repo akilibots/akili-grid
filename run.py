@@ -226,8 +226,6 @@ def ws_message(ws, message):
     log(F'{order_type} filled 🥧 at {order_price}')
     trades.append({'price':float(order_price), 'size':-float(order_size) if order_type=='BUY' else float(order_size)})
 
-    profit()
-
     # found it, let's build around it
     grid[filled_order] = None
 
@@ -275,7 +273,8 @@ def ws_message(ws, message):
                     log('Cancel order error 🤔')
                 grid[i] = None
             num_orders += 1
-
+    
+    profit()
     save_state()
 
 
