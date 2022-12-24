@@ -101,6 +101,10 @@ def load_state():
     grid = load_data['grid'].copy()
     trades = load_data['trades'].copy()
 
+    for i in trades:
+        i['price'] = Decimal(str(i['price']))
+        i['size'] = Decimal(str(i['size']))
+
     # check if all orders are as we left them
     # for order in grid:
     #    if grid[order] is None:
