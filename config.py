@@ -1,5 +1,5 @@
 import os
-import json
+import pyjson5 as json
 
 def config():
     # Load configuration
