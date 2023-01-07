@@ -1,5 +1,4 @@
 import datetime
-import json
 import requests
 import urllib
 import websocket
@@ -9,6 +8,7 @@ import time
 
 from bisect import bisect
 from decimal import Decimal
+import pyjson5 as json
 
 from dydx3 import Client
 from dydx3.constants import *
