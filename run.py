@@ -8,7 +8,7 @@ import time
 
 from bisect import bisect
 from decimal import Decimal
-import pyjson5 as json
+import pyjson5
 
 from dydx3 import Client
 from dydx3.constants import *
@@ -60,16 +60,6 @@ def save_state():
     global grid
     global trades
 
-    class DecimalEncoder(json.JSONEncoder):
-        def default(self, obj):
-            # 👇️ if passed in object is instance of Decimal
-            # convert it to a string
-            if isinstance(obj, Decimal):
-                return str(obj)
-            # 👇️ otherwise use the default behavior
-            return json.JSONEncoder.default(self, obj)
-
-
     # Update grid orders before saving
     # TODO - get all orders in one batch to avoid calling get_order_by_id for each order
     for row in grid:
@@ -83,8 +73,8 @@ def save_state():
         'trades': trades
     }
 
-    with open("data/state.json", "w") as f:
-        json.dump(save_data, f, cls=DecimalEncoder)
+    with open("data/state.json", "wt") as f:
+        pyjson5.encode_io(save_data, f, supply_bytes=False)
 
 
 def load_state():
@@ -95,8 +85,9 @@ def load_state():
         log('No state saved. Start new.')
         return False
 
-    with open("data/state.json", "r") as f:
-        load_data = json.load(f)
+    with open("data/state.json", "rt") as f:
+        load_data = pyjson5.decode_io(f)
+
     log('State loaded.')
     grid = load_data['grid'].copy()
     trades = load_data['trades'].copy()
@@ -176,7 +167,7 @@ def profit():
 def ws_open(ws):
     # Subscribe to order book updates
     log('Subscribing to order changes')
-    ws.send(json.dumps({
+    ws.send(pyjson5.encode({
         'type': 'subscribe',
         'channel': 'v3_accounts',
         'accountNumber': '0',
@@ -193,7 +184,7 @@ def ws_message(ws, message):
     global begin_order
     conf = config()
 
-    message = json.loads(message)
+    message = pyjson5.decode(message)
     if message['type'] != 'channel_data':
         # Not an order book update
         return
