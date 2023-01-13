@@ -9,3 +9,13 @@ def config():
             conf_string = f.read()
     
     return pyjson5.decode(conf_string)
+
+
+def tokens():
+    # Load configuration
+    conf_string = os.getenv('keys')
+    if conf_string is None:
+        with open("data/tokens.json", "rt") as f:
+            conf_string = f.read()
+ 
+    return pyjson5.decode(conf_string)

@@ -14,7 +14,7 @@ from dydx3 import Client
 from dydx3.constants import *
 from dydx3.helpers.request_helpers import generate_now_iso
 
-from config import config
+from config import config, tokens
 
 
 # Constants
@@ -36,20 +36,21 @@ user = None
 def log(msg):
     def _log(_msg):
         conf = config()
+        keys = tokens()
         _msg = conf['main']['name'] + ':' + _msg
         print(datetime.datetime.now().isoformat(), _msg)
 
-        if conf['telegram']['chatid'] == '' or conf['telegram']['bottoken'] == '':
+        if keys['telegram']['chatid'] == '' or keys['telegram']['bottoken'] == '':
             return
 
         params = {
-            'chat_id': conf['telegram']['chatid'],
+            'chat_id': keys['telegram']['chatid'],
             'text': _msg
         }
         payload_str = urllib.parse.urlencode(params, safe='@')
         requests.get(
             'https://api.telegram.org/bot' +
-            conf['telegram']['bottoken'] + '/sendMessage',
+            keys['telegram']['bottoken'] + '/sendMessage',
             params=payload_str
         )
     threading.Thread(target=_log, args=[msg]).start()
@@ -327,6 +328,7 @@ def main():
 
     startTime = datetime.datetime.now()
     conf = config()
+    keys = tokens()
 
     log(f'Start time {startTime.isoformat()} - strategy loaded.')
 
@@ -335,12 +337,12 @@ def main():
         network_id=NETWORK_ID_MAINNET,
         host=API_HOST_MAINNET,
         api_key_credentials={
-            'key': conf['dydx']['APIkey'],
-            'secret': conf['dydx']['APIsecret'],
-            'passphrase': conf['dydx']['APIpassphrase'],
+            'key': keys['dydx']['APIkey'],
+            'secret': keys['dydx']['APIsecret'],
+            'passphrase': keys['dydx']['APIpassphrase'],
         },
-        stark_private_key=conf['dydx']['stark_private_key'],
-        default_ethereum_address=conf['dydx']['default_ethereum_address'],
+        stark_private_key=keys['dydx']['stark_private_key'],
+        default_ethereum_address=keys['dydx']['default_ethereum_address'],
     )
 
     signature_time = generate_now_iso()
