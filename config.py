@@ -13,7 +13,7 @@ def config():
 
 def tokens():
     # Load configuration
-    conf_string = os.getenv('keys')
+    conf_string = os.getenv('tokens')
     if conf_string is None:
         with open("data/tokens.json", "rt") as f:
             conf_string = f.read()
