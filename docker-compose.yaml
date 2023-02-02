@@ -1,0 +1,7 @@
+services:
+  app:
+    build : .
+    volumes:
+      - ./:/app
+    restart : unless-stopped
+    command: python3 -u /app/run.py

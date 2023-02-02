@@ -1,8 +1,6 @@
 # Welcome to akili-grid!
 
-### After the FTX saga I'm moving 100% defi - so, reprogramming all my bots to work exclusively with dydx
-
-[![stability-alpha](https://img.shields.io/badge/stability-alpha-f4d03f.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#alpha)
+[![stability-beta](https://img.shields.io/badge/stability-alpha-f4d03f.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#alpha)
 [![Telegram](https://badges.aleen42.com/src/telegram.svg)](https://t.me/+9F0CZj8emLc2YTY0)
 
 Jambo! and welcome! akiligrid is a grid bot that uses the grid strategy to trade crypto currencies. The word **akili** means brain or mind in Swahili. The objective here is to make it the most intelligent grid bot in existence that has as many advanced features as possible, but which at the same time can be used by your typical crypto trader with basic grid bot experience
@@ -20,28 +18,21 @@ This software is for educational purposes only. Do not risk money which you are 
 ## Instructions
 ### Installing & Running
 
- 1. Clone the repo 
- 2. Install the dependencies by typing 
-`pip install -r requirements.txt` 
- 3. Create your strategy. This will create a subfolder strategies with your strategy data in as sub folder matching your strategy name. To create a new strategy, type
-`python create.py mystrategy`
-4. Configure your strategy by editing the strategy.ini file in your strategy folder.
-5. Run your strategy by typing
-`python run.py mystrategy`
-6. akiligrid will create a log in your strategy folder called log.txt or update you via telegram if you set it up.
+1. Clone the repo 
+2. Configure your strategy. Use the template in the /data/strategy.json file. 
+3. Set your private keys in the data/tokens.json file. For instructions on how to get your private keys for this bot, take a look here https://twitter.com/ChrisJangita/status/1593531663597723648
+3. Run your bot by typing in
+`docker compose up -d`
 
-I have been testing with FTX so I recommend it. If you do not have an account please use my affiliate link below. You get a discount on fees and I get a percentage so its a win win. Thank you.
+The bot will send status messages via telegram if you set it up.
 
-After the FTX saga, I'm going defi so here's my affiliate link to dydx https://dydx.exchange/r/JUDCLWBC
-I'm also re-programming my bots to use dydx exclusively
-
-For instructions on how to get your private keys for this bot, take a look here https://twitter.com/ChrisJangita/status/1593531663597723648
+This has been extensively tested in dYdX and has run for a full month, generating $10M trading volume in Dec 2022 with no errors. If you do not have an account with dYdX please use my affiliate link https://dydx.exchange/r/JUDCLWBC . You get a discount on fees and I get a percentage so its a win win. Thank you.
 
 More affiliate links to come. 
  
-I'll be testing on more exchanges soon. So far so good and the grid works as it should. There some little things I still need to iron out such as
- 1. No errors messages. It just throws python exceptions.
- 2. If you loose connection to the exchange, the script ends. It should be able to save state so you can pause, resume or restart if an exchange disconnect occurs.
- 3. If there is a large price rise that takes out more than one order above the current price ,the grid gets confused it scans orders from the bottom up. This can be mitigated by having one open order above. This doesn't happen if the price drops.
- 4. Need to Dockerise it so a user doesn't have to mess around with python and screen if running it off a server.
+I'll don't know if I will eventually expand to other exchanges, but so far so good and the grid works as it should. There some little things I still need to iron out such as
+ 1. Fixed ✅ No errors messages. It just throws python exceptions.
+ 2. Fixed ✅ If you loose connection to the exchange, the script ends. It should be able to save state so you can pause, resume or restart if an exchange disconnect occurs.
+ 3. Fixed ✅ If there is a large price rise that takes out more than one order above the current price ,the grid gets confused it scans orders from the bottom up. This can be mitigated by having one open order above. This doesn't happen if the price drops.
+ 4. Fixed ✅ Need to Dockerise it so a user doesn't have to mess around with python and screen if running it off a server.
  5. Implement a way to control the grid and change parameters on the fly using telegram, keypresses, or an open port.
