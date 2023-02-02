@@ -1,6 +1,6 @@
 # Welcome to akili-grid!
 
-[![stability-beta](https://img.shields.io/badge/stability-alpha-f4d03f.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#alpha)
+[![stability-beta](https://img.shields.io/badge/stability-beta-33bbff.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#beta)
 [![Telegram](https://badges.aleen42.com/src/telegram.svg)](https://t.me/+9F0CZj8emLc2YTY0)
 
 Jambo! and welcome! akiligrid is a grid bot that uses the grid strategy to trade crypto currencies. The word **akili** means brain or mind in Swahili. The objective here is to make it the most intelligent grid bot in existence that has as many advanced features as possible, but which at the same time can be used by your typical crypto trader with basic grid bot experience
