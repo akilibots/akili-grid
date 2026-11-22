@@ -1,0 +1,8 @@
+services:
+  app:
+    build:
+      context: .
+      target: runtime
+    env_file: .env
+    volumes:
+      - ./data:/app/data

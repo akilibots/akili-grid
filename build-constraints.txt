@@ -1,0 +1,3 @@
+# coincurve 20 uses the pre-0.10 scikit-build configuration.
+scikit-build-core<0.10
+cmake<4
